@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CacheUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.util</a> &gt; <span class="el_source">CacheUtils.java</span></div><h1>CacheUtils.java</h1><pre class="source lang-java linenums">package com.mentara.util;
+
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.stereotype.Component;
+
+import java.util.Collection;
+
+/**
+ * 缓存工具类
+ * 提供常用的缓存操作方法
+ */
+@Component
+public class CacheUtils {
+
+    private final CacheManager cacheManager;
+
+<span class="fc" id="L18">    public CacheUtils(CacheManager cacheManager) {</span>
+<span class="fc" id="L19">        this.cacheManager = cacheManager;</span>
+<span class="fc" id="L20">    }</span>
+
+    /**
+     * 清除指定缓存
+     * @param cacheName 缓存名称
+     */
+    public void evictCache(String cacheName) {
+<span class="fc" id="L27">        Cache cache = cacheManager.getCache(cacheName);</span>
+<span class="pc bpc" id="L28" title="1 of 2 branches missed.">        if (cache != null) {</span>
+<span class="fc" id="L29">            cache.clear();</span>
+        }
+<span class="fc" id="L31">    }</span>
+
+    /**
+     * 清除指定缓存中的特定键
+     * @param cacheName 缓存名称
+     * @param key 缓存键
+     */
+    public void evictCache(String cacheName, Object key) {
+<span class="nc" id="L39">        Cache cache = cacheManager.getCache(cacheName);</span>
+<span class="nc bnc" id="L40" title="All 2 branches missed.">        if (cache != null) {</span>
+<span class="nc" id="L41">            cache.evict(key);</span>
+        }
+<span class="nc" id="L43">    }</span>
+
+    /**
+     * 清除所有缓存
+     */
+    public void evictAllCaches() {
+<span class="fc" id="L49">        Collection&lt;String&gt; cacheNames = cacheManager.getCacheNames();</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        for (String cacheName : cacheNames) {</span>
+<span class="fc" id="L51">            evictCache(cacheName);</span>
+<span class="fc" id="L52">        }</span>
+<span class="fc" id="L53">    }</span>
+
+    /**
+     * 获取缓存统计信息
+     * @param cacheName 缓存名称
+     * @return 缓存对象，可能为null
+     */
+    public Cache getCache(String cacheName) {
+<span class="nc" id="L61">        return cacheManager.getCache(cacheName);</span>
+    }
+
+    /**
+     * 获取所有缓存名称
+     * @return 缓存名称集合
+     */
+    public Collection&lt;String&gt; getCacheNames() {
+<span class="fc" id="L69">        return cacheManager.getCacheNames();</span>
+    }
+
+    /**
+     * 检查缓存是否存在
+     * @param cacheName 缓存名称
+     * @return 是否存在
+     */
+    public boolean cacheExists(String cacheName) {
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        return cacheManager.getCache(cacheName) != null;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

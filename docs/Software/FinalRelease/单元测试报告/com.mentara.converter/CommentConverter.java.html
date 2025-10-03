@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommentConverter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.converter</a> &gt; <span class="el_source">CommentConverter.java</span></div><h1>CommentConverter.java</h1><pre class="source lang-java linenums">package com.mentara.converter;
+
+import com.mentara.dto.response.CommentResponse;
+import com.mentara.entity.Comment;
+import com.mentara.entity.User;
+import com.mentara.util.AvatarUtils;
+
+import org.springframework.stereotype.Component;
+
+@Component
+<span class="fc" id="L11">public class CommentConverter {</span>
+
+
+    public CommentResponse toResponse(Comment comment, boolean isLiked) {
+<span class="fc" id="L15">        return toResponse(comment, isLiked, null);</span>
+    }
+
+    public CommentResponse toResponse(Comment comment, boolean isLiked, Long currentUserId) {
+<span class="fc" id="L19">        User author = comment.getAuthor();</span>
+        
+        // 处理已删除用户的情况
+<span class="fc" id="L22">        String authorNickname = author.getNickname();</span>
+<span class="fc" id="L23">        String authorAvatar = author.getAvatar();</span>
+        
+        // 如果用户已删除，使用默认值
+<span class="pc bpc" id="L26" title="2 of 4 branches missed.">        if (author.getIsDeleted() != null &amp;&amp; author.getIsDeleted()) {</span>
+<span class="nc" id="L27">            authorNickname = &quot;已删除用户&quot;;</span>
+<span class="nc" id="L28">            authorAvatar = AvatarUtils.getDeletedUserAvatar();</span>
+        }
+        
+        // 处理软删除评论的情况
+<span class="fc" id="L32">        String content = comment.getContent();</span>
+<span class="pc bpc" id="L33" title="1 of 4 branches missed.">        if (comment.getIsDeleted() != null &amp;&amp; comment.getIsDeleted()) {</span>
+<span class="fc" id="L34">            content = &quot;此评论已被删除&quot;;</span>
+            // 已删除的评论无法被点赞或删除
+<span class="fc" id="L36">            isLiked = false;</span>
+<span class="fc" id="L37">            authorAvatar = AvatarUtils.getDeletedUserAvatar();</span>
+        }
+        
+        // 判断用户是否可以删除此评论
+<span class="fc" id="L41">        boolean canDelete = false;</span>
+<span class="pc bpc" id="L42" title="2 of 6 branches missed.">        if (currentUserId != null &amp;&amp; (comment.getIsDeleted() == null || !comment.getIsDeleted())) {</span>
+            // 用户可以删除自己的评论，但已删除的评论无法再次删除
+<span class="fc" id="L44">            canDelete = author.getId().equals(currentUserId);</span>
+        }
+        
+<span class="fc" id="L47">        return CommentResponse.builder()</span>
+<span class="fc" id="L48">                .id(comment.getId())</span>
+<span class="fc" id="L49">                .content(content)</span>
+<span class="fc" id="L50">                .authorId(author.getId())</span>
+<span class="fc" id="L51">                .authorNickname(authorNickname)</span>
+<span class="fc" id="L52">                .authorAvatar(authorAvatar)</span>
+<span class="fc" id="L53">                .authorRole(author.getRole().name())</span>
+<span class="fc" id="L54">                .createdAt(comment.getCreatedAt())</span>
+<span class="fc" id="L55">                .postId(comment.getPost().getId())</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">                .parentId(comment.getParent() != null ? comment.getParent().getId() : null)</span>
+<span class="fc bfc" id="L57" title="All 2 branches covered.">                .topCommentId(comment.getTopComment() != null ? comment.getTopComment().getId() : null)</span>
+<span class="fc" id="L58">                .repliesCount(comment.getReplysCount())</span>
+<span class="fc" id="L59">                .likesCount(comment.getLikesCount())</span>
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">                .reportCount(comment.getReportCount() != null ? comment.getReportCount() : 0)</span>
+<span class="fc" id="L61">                .isLiked(isLiked)</span>
+<span class="fc" id="L62">                .canDelete(canDelete)</span>
+<span class="fc" id="L63">                .isDeleted(comment.getIsDeleted())</span>
+<span class="fc" id="L64">                .deletedAt(comment.getDeletedAt())</span>
+<span class="fc" id="L65">                .deletedBy(comment.getDeletedBy())</span>
+<span class="fc" id="L66">                .deleteReason(comment.getDeleteReason())</span>
+<span class="fc" id="L67">                .build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

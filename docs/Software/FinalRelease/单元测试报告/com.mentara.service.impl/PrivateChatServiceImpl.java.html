@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PrivateChatServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">PrivateChatServiceImpl.java</span></div><h1>PrivateChatServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.response.ChatRoomResponse;
+import com.mentara.dto.response.UserProfileResponse;
+import com.mentara.entity.ChatRoom;
+import com.mentara.entity.ChatRoomUser;
+import com.mentara.entity.User;
+import com.mentara.enums.ChatRoomType;
+import com.mentara.repository.ChatRoomRepository;
+import com.mentara.repository.ChatRoomUserRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.PrivateChatService;
+import com.mentara.service.ChatRoomUserService;
+import com.mentara.dto.request.ChatRoomUserRequest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L24">public class PrivateChatServiceImpl implements PrivateChatService {</span>
+
+    @Autowired
+    private ChatRoomRepository chatRoomRepository;
+    
+    @Autowired
+    private ChatRoomUserRepository chatRoomUserRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private ChatRoomUserService chatRoomUserService;
+
+    @Override
+    public List&lt;ChatRoomResponse&gt; getPrivateRooms(Long userId) {
+        // 获取用户参与的所有私聊房间
+<span class="fc" id="L41">        List&lt;ChatRoomUser&gt; userRooms = chatRoomUserRepository.findByUserIdAndChatRoomTypeAndVersionGreaterThan(</span>
+<span class="fc" id="L42">                userId, ChatRoomType.PRIVATE, 0);</span>
+        
+<span class="fc" id="L44">        return userRooms.stream()</span>
+<span class="fc" id="L45">                .map(chatRoomUser -&gt; {</span>
+<span class="nc" id="L46">                    ChatRoom room = chatRoomUser.getChatRoom();</span>
+<span class="nc" id="L47">                    ChatRoomResponse response = toResponse(room);</span>
+                    
+                    // 为私聊房间设置显示名称（对方的昵称）
+                    try {
+<span class="nc" id="L51">                        UserProfileResponse otherUser = getOtherUser(room.getId(), userId);</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">                        response.setName(otherUser.getNickname() != null ? otherUser.getNickname() : otherUser.getUsername());</span>
+<span class="nc" id="L53">                    } catch (Exception e) {</span>
+<span class="nc" id="L54">                        response.setName(&quot;私聊&quot;);</span>
+<span class="nc" id="L55">                    }</span>
+                    
+<span class="nc" id="L57">                    return response;</span>
+                })
+<span class="fc" id="L59">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    @Transactional
+    public ChatRoomResponse createOrGetPrivateRoom(Long userId, Long targetUserId) {
+<span class="fc bfc" id="L65" title="All 2 branches covered.">        if (userId.equals(targetUserId)) {</span>
+<span class="fc" id="L66">            throw new RuntimeException(&quot;不能与自己创建私聊&quot;);</span>
+        }
+        
+        // 检查目标用户是否存在
+<span class="fc" id="L70">        User targetUser = userRepository.findById(targetUserId)</span>
+<span class="pc" id="L71">                .orElseThrow(() -&gt; new RuntimeException(&quot;目标用户不存在&quot;));</span>
+        
+<span class="fc" id="L73">        User currentUser = userRepository.findById(userId)</span>
+<span class="pc" id="L74">                .orElseThrow(() -&gt; new RuntimeException(&quot;当前用户不存在&quot;));</span>
+        
+        // 查找是否已存在私聊房间
+<span class="fc" id="L77">        ChatRoom existingRoom = findExistingPrivateRoom(userId, targetUserId);</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        if (existingRoom != null) {</span>
+            // 确保两个用户都在房间中
+<span class="nc" id="L80">            ensureUsersInRoom(existingRoom, userId, targetUserId);</span>
+<span class="nc" id="L81">            ChatRoomResponse response = toResponse(existingRoom);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            response.setName(targetUser.getNickname() != null ? targetUser.getNickname() : targetUser.getUsername());</span>
+<span class="nc" id="L83">            return response;</span>
+        }
+        
+        // 创建新的私聊房间
+<span class="fc" id="L87">        ChatRoom room = new ChatRoom();</span>
+<span class="fc" id="L88">        room.setName(&quot;私聊&quot;); // 这个名称会在前端根据对方用户动态显示</span>
+<span class="fc" id="L89">        room.setDescription(&quot;私聊房间&quot;);</span>
+<span class="fc" id="L90">        room.setType(ChatRoomType.PRIVATE);</span>
+<span class="fc" id="L91">        ChatRoom savedRoom = chatRoomRepository.save(room);</span>
+        
+        // 添加两个用户到房间
+<span class="fc" id="L94">        addUserToPrivateRoom(savedRoom, currentUser);</span>
+<span class="fc" id="L95">        addUserToPrivateRoom(savedRoom, targetUser);</span>
+        
+<span class="fc" id="L97">        ChatRoomResponse response = toResponse(savedRoom);</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">        response.setName(targetUser.getNickname() != null ? targetUser.getNickname() : targetUser.getUsername());</span>
+<span class="fc" id="L99">        return response;</span>
+    }
+
+    @Override
+    @Transactional
+    public void deletePrivateRoom(Long chatRoomId, Long userId) {
+        // 验证房间存在且为私聊房间
+<span class="fc" id="L106">        ChatRoom room = chatRoomRepository.findByIdAndIsDeletedFalse(chatRoomId)</span>
+<span class="pc" id="L107">                .orElseThrow(() -&gt; new RuntimeException(&quot;私聊房间不存在&quot;));</span>
+        
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        if (room.getType() != ChatRoomType.PRIVATE) {</span>
+<span class="nc" id="L110">            throw new RuntimeException(&quot;只能删除私聊房间&quot;);</span>
+        }
+        
+        // 获取用户在该房间的记录
+<span class="fc" id="L114">        List&lt;ChatRoomUser&gt; userInRoom = chatRoomUserRepository.findByChatRoomIdAndUserId(chatRoomId, userId);</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        if (userInRoom.isEmpty()) {</span>
+<span class="fc" id="L116">            throw new RuntimeException(&quot;用户不在该私聊房间中&quot;);</span>
+        }
+        
+        // 让用户退出房间
+<span class="fc" id="L120">        ChatRoomUser chatRoomUser = userInRoom.get(0);</span>
+<span class="fc" id="L121">        chatRoomUserService.quitRoom(chatRoomUser.getId());</span>
+        
+        // 检查房间中是否还有其他活跃用户
+<span class="fc" id="L124">        List&lt;ChatRoomUser&gt; activeUsers = chatRoomUserRepository.findByChatRoomIdAndVersionGreaterThan(chatRoomId, 0);</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        if (activeUsers.isEmpty()) {</span>
+            // 如果没有活跃用户，软删除房间
+<span class="nc" id="L127">            room.setIsDeleted(true);</span>
+<span class="nc" id="L128">            room.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L129">            chatRoomRepository.save(room);</span>
+        }
+<span class="fc" id="L131">    }</span>
+
+    @Override
+    public UserProfileResponse getOtherUser(Long chatRoomId, Long userId) {
+        // 验证房间存在且为私聊房间
+<span class="fc" id="L136">        ChatRoom room = chatRoomRepository.findByIdAndIsDeletedFalse(chatRoomId)</span>
+<span class="pc" id="L137">                .orElseThrow(() -&gt; new RuntimeException(&quot;私聊房间不存在&quot;));</span>
+        
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">        if (room.getType() != ChatRoomType.PRIVATE) {</span>
+<span class="nc" id="L140">            throw new RuntimeException(&quot;只能查询私聊房间的对方用户&quot;);</span>
+        }
+        
+        // 获取房间中的所有用户
+<span class="fc" id="L144">        List&lt;ChatRoomUser&gt; roomUsers = chatRoomUserRepository.findByChatRoomIdAndVersionGreaterThan(chatRoomId, 0);</span>
+        
+<span class="fc bfc" id="L146" title="All 2 branches covered.">        if (roomUsers.size() != 2) {</span>
+<span class="fc" id="L147">            throw new RuntimeException(&quot;私聊房间应该只有两个用户&quot;);</span>
+        }
+        
+        // 找到对方用户
+<span class="fc" id="L151">        ChatRoomUser otherChatRoomUser = roomUsers.stream()</span>
+<span class="fc bfc" id="L152" title="All 2 branches covered.">                .filter(ru -&gt; !ru.getUser().getId().equals(userId))</span>
+<span class="fc" id="L153">                .findFirst()</span>
+<span class="pc" id="L154">                .orElseThrow(() -&gt; new RuntimeException(&quot;找不到对方用户&quot;));</span>
+        
+<span class="fc" id="L156">        User otherUser = otherChatRoomUser.getUser();</span>
+        
+        // 转换为UserProfileResponse
+<span class="fc" id="L159">        UserProfileResponse response = new UserProfileResponse();</span>
+<span class="fc" id="L160">        response.setId(otherUser.getId());</span>
+<span class="fc" id="L161">        response.setUsername(otherUser.getUsername());</span>
+<span class="fc" id="L162">        response.setNickname(otherUser.getNickname());</span>
+<span class="fc" id="L163">        response.setAvatar(otherUser.getAvatar());</span>
+<span class="fc" id="L164">        response.setRole(otherUser.getRole().name());</span>
+<span class="fc" id="L165">        response.setCreatedAt(otherUser.getCreatedAt());</span>
+        
+<span class="fc" id="L167">        return response;</span>
+    }
+    
+    /**
+     * 查找已存在的私聊房间
+     */
+    private ChatRoom findExistingPrivateRoom(Long userId1, Long userId2) {
+        // 查找两个用户都参与的私聊房间
+<span class="fc" id="L175">        List&lt;ChatRoomUser&gt; user1Rooms = chatRoomUserRepository.findByUserIdAndChatRoomTypeAndVersionGreaterThan(</span>
+<span class="fc" id="L176">                userId1, ChatRoomType.PRIVATE, 0);</span>
+<span class="fc" id="L177">        List&lt;ChatRoomUser&gt; user2Rooms = chatRoomUserRepository.findByUserIdAndChatRoomTypeAndVersionGreaterThan(</span>
+<span class="fc" id="L178">                userId2, ChatRoomType.PRIVATE, 0);</span>
+        
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">        for (ChatRoomUser room1 : user1Rooms) {</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            for (ChatRoomUser room2 : user2Rooms) {</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                if (room1.getChatRoom().getId().equals(room2.getChatRoom().getId())) {</span>
+<span class="nc" id="L183">                    return room1.getChatRoom();</span>
+                }
+<span class="nc" id="L185">            }</span>
+<span class="nc" id="L186">        }</span>
+        
+<span class="fc" id="L188">        return null;</span>
+    }
+    
+    /**
+     * 确保两个用户都在房间中
+     */
+    private void ensureUsersInRoom(ChatRoom room, Long userId1, Long userId2) {
+        // 检查并添加用户1
+<span class="nc" id="L196">        List&lt;ChatRoomUser&gt; user1InRoom = chatRoomUserRepository.findByChatRoomIdAndUserId(room.getId(), userId1);</span>
+<span class="nc bnc" id="L197" title="All 4 branches missed.">        if (user1InRoom.isEmpty() || user1InRoom.get(0).getVersion() &lt;= 0) {</span>
+<span class="nc" id="L198">            User user1 = userRepository.findById(userId1)</span>
+<span class="nc" id="L199">                    .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在: &quot; + userId1));</span>
+<span class="nc" id="L200">            addUserToPrivateRoom(room, user1);</span>
+        }
+        
+        // 检查并添加用户2
+<span class="nc" id="L204">        List&lt;ChatRoomUser&gt; user2InRoom = chatRoomUserRepository.findByChatRoomIdAndUserId(room.getId(), userId2);</span>
+<span class="nc bnc" id="L205" title="All 4 branches missed.">        if (user2InRoom.isEmpty() || user2InRoom.get(0).getVersion() &lt;= 0) {</span>
+<span class="nc" id="L206">            User user2 = userRepository.findById(userId2)</span>
+<span class="nc" id="L207">                    .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在: &quot; + userId2));</span>
+<span class="nc" id="L208">            addUserToPrivateRoom(room, user2);</span>
+        }
+<span class="nc" id="L210">    }</span>
+    
+    /**
+     * 添加用户到私聊房间
+     */
+    private void addUserToPrivateRoom(ChatRoom room, User user) {
+<span class="fc" id="L216">        ChatRoomUserRequest request = new ChatRoomUserRequest();</span>
+<span class="fc" id="L217">        request.setChatRoomId(room.getId());</span>
+<span class="fc" id="L218">        request.setUserId(user.getId());</span>
+<span class="fc" id="L219">        request.setDisplayNickname(user.getNickname());</span>
+<span class="fc" id="L220">        request.setDisplayAvatar(user.getAvatar());</span>
+        
+<span class="fc" id="L222">        chatRoomUserService.addUserToRoom(request);</span>
+<span class="fc" id="L223">    }</span>
+    
+    /**
+     * 转换ChatRoom为ChatRoomResponse
+     */
+    private ChatRoomResponse toResponse(ChatRoom room) {
+<span class="fc" id="L229">        ChatRoomResponse response = new ChatRoomResponse();</span>
+<span class="fc" id="L230">        response.setId(room.getId());</span>
+<span class="fc" id="L231">        response.setName(room.getName());</span>
+<span class="fc" id="L232">        response.setDescription(room.getDescription());</span>
+<span class="fc" id="L233">        response.setType(room.getType());</span>
+<span class="fc" id="L234">        response.setCreatedAt(room.getCreatedAt());</span>
+<span class="fc" id="L235">        return response;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

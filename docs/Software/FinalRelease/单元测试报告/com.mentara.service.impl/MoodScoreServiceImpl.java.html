@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MoodScoreServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">MoodScoreServiceImpl.java</span></div><h1>MoodScoreServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.response.DepressCheckResponse;
+import com.mentara.entity.MoodScore;
+import com.mentara.entity.Post;
+import com.mentara.entity.Checkin;
+import com.mentara.entity.User;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.repository.MoodScoreRepository;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.CheckinRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.DepressCheckService;
+import com.mentara.service.TextScoreService;
+import com.mentara.service.MoodScoreService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.regex.Pattern;
+
+<span class="fc" id="L25">@Slf4j</span>
+@Service
+<span class="fc" id="L27">public class MoodScoreServiceImpl implements MoodScoreService {</span>
+
+    @Autowired
+    private MoodScoreRepository moodScoreRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
+    private CheckinRepository checkinRepository;
+
+    @Autowired
+    private DepressCheckService depressCheckService;
+
+    @Autowired
+    private TextScoreService textScoreService;
+
+    // 报警阈值配置
+    private static final int MOOD_ALERT_THRESHOLD = 2; // 心情得分低于2分触发报警
+    private static final double ALERT_SCORE_THRESHOLD = 0.7; // 报警分数高于0.7触发报警
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;moodScores&quot;, &quot;statistics&quot;}, allEntries = true)
+    public MoodScore createMoodScoreForPost(Long postId, Long userId, String content) {
+<span class="fc" id="L55">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L56">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+        
+<span class="fc" id="L58">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L59">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+
+        // 调用AI服务进行情绪分析
+<span class="fc" id="L62">        Integer moodGrade = textScoreService.scoreText(content, &quot;mood&quot;);</span>
+<span class="fc" id="L63">        DepressCheckResponse depressCheckResponse = depressCheckService.checkDepress(content, &quot;depression&quot;);</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        Boolean isAlert = depressCheckResponse.getLabel() == 1 ? true : false;</span>
+
+        // 创建心情评分记录
+<span class="fc" id="L67">        MoodScore moodScore = new MoodScore();</span>
+<span class="fc" id="L68">        moodScore.setUser(user);</span>
+<span class="fc" id="L69">        moodScore.setPost(post);</span>
+<span class="fc" id="L70">        moodScore.setContentType(MoodScore.ContentType.POST);</span>
+<span class="fc" id="L71">        moodScore.setContentText(content);</span>
+<span class="fc" id="L72">        moodScore.setMoodGrade(moodGrade);</span>
+<span class="fc" id="L73">        moodScore.setIsAlert(isAlert);</span>
+<span class="fc" id="L74">        moodScore.setAlertScore(depressCheckResponse.getScore());</span>
+
+<span class="fc" id="L76">        MoodScore savedMoodScore = moodScoreRepository.save(moodScore);</span>
+        
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        if (isAlert) {</span>
+<span class="fc" id="L79">            log.warn(&quot;用户 {} 的帖子触发报警，心情得分: {}, 报警分数: {}&quot;, userId, moodGrade, depressCheckResponse.getScore());</span>
+        } else {
+<span class="nc" id="L81">            log.info(&quot;用户 {} 的帖子心情分析完成，心情得分: {}, 报警分数: {}&quot;, userId, moodGrade, depressCheckResponse.getScore());</span>
+        }
+
+<span class="fc" id="L84">        return savedMoodScore;</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;moodScores&quot;, &quot;statistics&quot;}, allEntries = true)
+    public MoodScore createMoodScoreForCheckin(Long checkinId, Long userId, String content) {
+<span class="fc" id="L91">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L92">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+        
+<span class="fc" id="L94">        Checkin checkin = checkinRepository.findById(checkinId)</span>
+<span class="pc" id="L95">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Checkin&quot;, &quot;id&quot;, checkinId));</span>
+
+        // 调用AI服务进行情绪分析
+<span class="fc" id="L98">        Integer moodGrade = textScoreService.scoreText(content, &quot;mood&quot;);</span>
+<span class="fc" id="L99">        DepressCheckResponse depressCheckResponse = depressCheckService.checkDepress(content, &quot;depression&quot;);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        Boolean isAlert = depressCheckResponse.getLabel() == 1 ? true : false;</span>
+        // 创建心情评分记录
+<span class="fc" id="L102">        MoodScore moodScore = new MoodScore();</span>
+<span class="fc" id="L103">        moodScore.setUser(user);</span>
+<span class="fc" id="L104">        moodScore.setCheckin(checkin);</span>
+<span class="fc" id="L105">        moodScore.setContentType(MoodScore.ContentType.CHECKIN);</span>
+<span class="fc" id="L106">        moodScore.setContentText(content);</span>
+<span class="fc" id="L107">        moodScore.setMoodGrade(moodGrade);</span>
+<span class="fc" id="L108">        moodScore.setIsAlert(isAlert);</span>
+<span class="fc" id="L109">        moodScore.setAlertScore(depressCheckResponse.getScore());</span>
+
+<span class="fc" id="L111">        MoodScore savedMoodScore = moodScoreRepository.save(moodScore);</span>
+        
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        if (isAlert) {</span>
+<span class="fc" id="L114">            log.warn(&quot;用户 {} 的打卡记录触发报警，心情得分: {}, 报警分数: {}&quot;, userId, moodGrade, depressCheckResponse.getScore());</span>
+        } else {
+<span class="fc" id="L116">            log.info(&quot;用户 {} 的打卡记录心情分析完成，心情得分: {}, 报警分数: {}&quot;, userId, moodGrade, depressCheckResponse.getScore());</span>
+        }
+
+<span class="fc" id="L119">        return savedMoodScore;</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;moodScores&quot;, key = &quot;'alert_check_' + #moodGrade + '_' + #alertScore + '_' + #content.hashCode()&quot;)
+    public boolean shouldTriggerAlert(Integer moodGrade, Double alertScore, String content) {
+        // 检查心情得分是否过低
+<span class="pc bpc" id="L126" title="1 of 4 branches missed.">        boolean lowMood = moodGrade != null &amp;&amp; moodGrade &lt;= MOOD_ALERT_THRESHOLD;</span>
+        
+        // 检查报警分数是否过高
+<span class="pc bpc" id="L129" title="1 of 4 branches missed.">        boolean highAlertScore = alertScore != null &amp;&amp; alertScore &gt;= ALERT_SCORE_THRESHOLD;</span>
+        
+        // 检查内容是否包含危险关键词
+<span class="fc" id="L132">        boolean hasDangerousContent = checkDangerousContent(content);</span>
+        
+<span class="fc bfc" id="L134" title="All 6 branches covered.">        return lowMood || highAlertScore || hasDangerousContent;</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;moodScores&quot;, key = &quot;'alert_score_' + #content.hashCode()&quot;)
+    public Double calculateAlertScore(String content) {
+<span class="fc bfc" id="L140" title="All 4 branches covered.">        if (content == null || content.trim().isEmpty()) {</span>
+<span class="fc" id="L141">            return 0.0;</span>
+        }
+
+        try {
+            // 使用抑郁检查服务计算报警分数
+<span class="fc" id="L146">            var depressionResult = depressCheckService.checkDepress(content, &quot;depression&quot;);</span>
+<span class="fc" id="L147">            var anxietyResult = depressCheckService.checkDepress(content, &quot;anxiety&quot;);</span>
+<span class="fc" id="L148">            var stressResult = depressCheckService.checkDepress(content, &quot;stress&quot;);</span>
+
+            // 计算综合报警分数（取最高分）
+<span class="fc" id="L151">            double maxScore = 0.0;</span>
+<span class="pc bpc" id="L152" title="2 of 4 branches missed.">            if (depressionResult != null &amp;&amp; depressionResult.getScore() != null) {</span>
+<span class="fc" id="L153">                maxScore = Math.max(maxScore, depressionResult.getScore());</span>
+            }
+<span class="pc bpc" id="L155" title="2 of 4 branches missed.">            if (anxietyResult != null &amp;&amp; anxietyResult.getScore() != null) {</span>
+<span class="fc" id="L156">                maxScore = Math.max(maxScore, anxietyResult.getScore());</span>
+            }
+<span class="pc bpc" id="L158" title="2 of 4 branches missed.">            if (stressResult != null &amp;&amp; stressResult.getScore() != null) {</span>
+<span class="fc" id="L159">                maxScore = Math.max(maxScore, stressResult.getScore());</span>
+            }
+
+<span class="fc" id="L162">            return maxScore;</span>
+<span class="nc" id="L163">        } catch (Exception e) {</span>
+<span class="nc" id="L164">            log.error(&quot;计算报警分数时发生异常&quot;, e);</span>
+<span class="nc" id="L165">            return 0.0;</span>
+        }
+    }
+
+
+    /**
+     * 检查是否包含危险内容
+     */
+    private boolean checkDangerousContent(String content) {
+<span class="pc bpc" id="L174" title="2 of 4 branches missed.">        if (content == null || content.trim().isEmpty()) {</span>
+<span class="nc" id="L175">            return false;</span>
+        }
+
+        // 危险关键词列表
+<span class="fc" id="L179">        String[] dangerousKeywords = {</span>
+            &quot;自杀&quot;, &quot;自残&quot;, &quot;死亡&quot;, &quot;结束生命&quot;, &quot;不想活了&quot;, &quot;活不下去了&quot;,
+            &quot;kill myself&quot;, &quot;suicide&quot;, &quot;die&quot;, &quot;death&quot;, &quot;end my life&quot;,
+            &quot;伤害&quot;, &quot;暴力&quot;, &quot;攻击&quot;, &quot;伤害他人&quot;, &quot;报复&quot;
+        };
+
+<span class="fc" id="L185">        String lowerContent = content.toLowerCase();</span>
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        for (String keyword : dangerousKeywords) {</span>
+<span class="fc bfc" id="L187" title="All 2 branches covered.">            if (lowerContent.contains(keyword.toLowerCase())) {</span>
+<span class="fc" id="L188">                return true;</span>
+            }
+        }
+
+<span class="fc" id="L192">        return false;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

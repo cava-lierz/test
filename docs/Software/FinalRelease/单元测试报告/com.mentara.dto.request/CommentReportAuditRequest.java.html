@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommentReportAuditRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.dto.request</a> &gt; <span class="el_source">CommentReportAuditRequest.java</span></div><h1>CommentReportAuditRequest.java</h1><pre class="source lang-java linenums">package com.mentara.dto.request;
+
+import lombok.Builder;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+/**
+ * 评论举报审核请求DTO
+ */
+<span class="nc bnc" id="L11" title="All 38 branches missed.">@Data</span>
+<span class="pc" id="L12">@Builder</span>
+<span class="fc" id="L13">@AllArgsConstructor</span>
+<span class="nc" id="L14">@NoArgsConstructor</span>
+public class CommentReportAuditRequest {
+    
+    /**
+     * 举报原因
+     */
+<span class="fc" id="L20">    private String reportReason;</span>
+    
+    /**
+     * 评论内容
+     */
+<span class="fc" id="L25">    private String commentContent;</span>
+    
+    /**
+     * 评论作者用户名（可选，用于上下文判断）
+     */
+<span class="fc" id="L30">    private String authorUsername;</span>
+    
+    /**
+     * 所属帖子标题（可选，用于上下文判断）
+     */
+<span class="fc" id="L35">    private String postTitle;</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

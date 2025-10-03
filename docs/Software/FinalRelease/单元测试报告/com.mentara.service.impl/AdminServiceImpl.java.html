@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AdminServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">AdminServiceImpl.java</span></div><h1>AdminServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.response.AdminStatsResponse;
+import com.mentara.dto.response.UserProfileResponse;
+import com.mentara.entity.User;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.repository.PostLikeRepository;
+import com.mentara.repository.CommentRepository;
+import com.mentara.repository.CheckinRepository;
+import com.mentara.repository.ReportRepository;
+import com.mentara.repository.CommentReportRepository;
+import com.mentara.entity.Report;
+import com.mentara.entity.CommentReport;
+import com.mentara.service.AdminService;
+import com.mentara.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L29">public class AdminServiceImpl implements AdminService {</span>
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PostRepository postRepository;
+    
+    @Autowired
+    private PostLikeRepository postLikeRepository;
+    
+    @Autowired
+    private CommentRepository commentRepository;
+    
+    @Autowired
+    private CheckinRepository checkinRepository;
+    
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Autowired
+    private CommentReportRepository commentReportRepository;
+
+    @Autowired
+    private UserService userService;
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'admin_stats'&quot;)
+    public AdminStatsResponse getAdminStats() {
+        // 获取总用户数
+<span class="fc" id="L59">        long totalUsers = userService.countUsers();</span>
+        
+        // 获取活跃用户数（最近30天有登录活动的用户）
+<span class="fc" id="L62">        long activeUsers = userService.getActiveUsersCount();</span>
+        
+        // 获取本月新增用户数
+<span class="fc" id="L65">        long newUsersThisMonth = userService.getNewUsersThisMonth();</span>
+        
+        // 获取总帖子数
+<span class="fc" id="L68">        long totalPosts = postRepository.count();</span>
+        
+        // 获取总评论数
+<span class="fc" id="L71">        long totalComments = commentRepository.count();</span>
+        
+        // 获取总点赞数
+<span class="fc" id="L74">        long totalLikes = postLikeRepository.count();</span>
+        
+        // 计算平均心情评分
+<span class="fc" id="L77">        Double avgMoodRating = checkinRepository.findGlobalAverageRating();</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        double averageMoodScore = avgMoodRating != null ? avgMoodRating : 3.8; // 默认值3.8</span>
+        
+        // 获取待处理的举报数量 - 统计需要人工处理的举报
+        // 1. 帖子举报：状态为WAITING的举报记录
+<span class="fc" id="L82">        int pendingPostReports = reportRepository.countByState(Report.State.WAITING);</span>
+        // 2. 评论举报：状态为WAITING的举报记录
+<span class="fc" id="L84">        int pendingCommentReports = commentReportRepository.countByState(CommentReport.State.WAITING);</span>
+<span class="fc" id="L85">        int pendingReports = pendingPostReports + pendingCommentReports;</span>
+<span class="fc" id="L86">        int pendingPosts = 0;   // 帖子审核功能待实现</span>
+
+<span class="fc" id="L88">        return new AdminStatsResponse(</span>
+            pendingReports,
+            pendingPosts,
+            activeUsers,
+            newUsersThisMonth,
+            totalUsers,
+            totalPosts,
+            totalComments,
+            totalLikes,
+            averageMoodScore
+        );
+    }
+
+    @Override
+    public Page&lt;UserProfileResponse&gt; getAllUsersWithStats(Pageable pageable) {
+<span class="fc" id="L103">        Page&lt;User&gt; usersPage = userRepository.findAll(pageable);</span>
+<span class="fc" id="L104">        return usersPage.map(this::convertToUserProfileResponse);</span>
+    }
+
+    @Override
+    public Page&lt;UserProfileResponse&gt; searchUsersWithStats(String keyword, Pageable pageable) {
+<span class="fc" id="L109">        Page&lt;User&gt; usersPage = userService.searchUsers(keyword, pageable);</span>
+<span class="fc" id="L110">        return usersPage.map(this::convertToUserProfileResponse);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'user_stats_' + #userId&quot;)
+    public UserProfileResponse getUserStatsById(Long userId) {
+<span class="fc" id="L116">        return userRepository.findById(userId)</span>
+<span class="fc" id="L117">            .map(this::convertToUserProfileResponse)</span>
+<span class="fc" id="L118">            .orElse(null);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'new_users_this_month'&quot;)
+    public long getNewUsersThisMonth() {
+<span class="nc" id="L124">        return userService.getNewUsersThisMonth();</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'active_users_count'&quot;)
+    public long getActiveUsersCount() {
+<span class="nc" id="L130">        return userService.getActiveUsersCount();</span>
+    }
+    
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'total_users_count'&quot;)
+    public long getTotalUsersCount() {
+<span class="nc" id="L136">        return userService.countUsers();</span>
+    }
+
+    private UserProfileResponse convertToUserProfileResponse(User user) {
+        try {
+            // 获取用户发布的帖子数量
+<span class="fc" id="L142">            Integer postsCount = postRepository.countByAuthorId(user.getId());</span>
+            
+            // 获取用户获得的总点赞数（用户发布的帖子被点赞的总数）
+<span class="fc" id="L145">            Integer totalLikes = postLikeRepository.countByPostAuthorId(user.getId());</span>
+            
+            // 获取用户评论数量
+<span class="fc" id="L148">            Integer commentsCount = commentRepository.countByAuthorId(user.getId());</span>
+            
+            // 获取用户平均心情评分（从打卡记录中计算）
+<span class="fc" id="L151">            Double averageMoodRating = checkinRepository.findAverageRatingByUserId(user.getId());</span>
+            
+            // 使用用户表中的被举报次数（持久化存储）
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">            Integer reportedCount = user.getReportedCount() != null ? user.getReportedCount() : 0;</span>
+            
+<span class="fc" id="L156">            return UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating, reportedCount);</span>
+<span class="nc" id="L157">        } catch (Exception e) {</span>
+            // 返回一个基本的用户信息，避免整个请求失败
+<span class="nc" id="L159">            return UserProfileResponse.fromUser(user, 0, 0, 0, 0.0, 0);</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

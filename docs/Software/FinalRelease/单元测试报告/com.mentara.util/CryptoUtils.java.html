@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CryptoUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.util</a> &gt; <span class="el_source">CryptoUtils.java</span></div><h1>CryptoUtils.java</h1><pre class="source lang-java linenums">package com.mentara.util;
+
+import org.springframework.stereotype.Component;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+/**
+ * 加密工具类
+ * 用于学号SHA-256加密
+ */
+@Component
+<span class="fc" id="L13">public class CryptoUtils {</span>
+    
+    private static final String HASH_ALGORITHM = &quot;SHA-256&quot;;
+    
+    /**
+     * 使用SHA-256对学号进行加密
+     * @param studentId 原始学号
+     * @return 加密后的学号哈希值
+     */
+    public static String hashStudentId(String studentId) {
+        try {
+<span class="fc" id="L24">            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);</span>
+<span class="fc" id="L25">            byte[] hash = digest.digest(studentId.getBytes(StandardCharsets.UTF_8));</span>
+<span class="fc" id="L26">            return bytesToHex(hash);</span>
+<span class="nc" id="L27">        } catch (NoSuchAlgorithmException e) {</span>
+<span class="nc" id="L28">            throw new RuntimeException(&quot;SHA-256算法不可用&quot;, e);</span>
+        }
+    }
+    
+    /**
+     * 验证学号哈希值是否匹配
+     * @param studentId 原始学号
+     * @param hashedStudentId 存储的哈希值
+     * @return 是否匹配
+     */
+    public static boolean verifyStudentId(String studentId, String hashedStudentId) {
+<span class="nc" id="L39">        return hashStudentId(studentId).equals(hashedStudentId);</span>
+    }
+    
+    /**
+     * 将字节数组转换为十六进制字符串
+     * @param bytes 字节数组
+     * @return 十六进制字符串
+     */
+    private static String bytesToHex(byte[] bytes) {
+<span class="fc" id="L48">        StringBuilder result = new StringBuilder();</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        for (byte b : bytes) {</span>
+<span class="fc" id="L50">            result.append(String.format(&quot;%02x&quot;, b));</span>
+        }
+<span class="fc" id="L52">        return result.toString();</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataInitializer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.config</a> &gt; <span class="el_source">DataInitializer.java</span></div><h1>DataInitializer.java</h1><pre class="source lang-java linenums">package com.mentara.config;
+
+import com.mentara.entity.Expert;
+import com.mentara.entity.User;
+import com.mentara.entity.UserAuth;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+@Configuration
+<span class="fc" id="L16">public class DataInitializer {</span>
+
+    @Autowired
+    private ExpertRepository expertRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Value(&quot;${app.data.init.enabled:true}&quot;)
+    private boolean dataInitEnabled;
+
+    @Bean
+    CommandLineRunner initData() {
+<span class="fc" id="L32">        return args -&gt; {</span>
+<span class="pc bpc" id="L33" title="1 of 2 branches missed.">            if (!dataInitEnabled) {</span>
+<span class="fc" id="L34">                System.out.println(&quot;数据初始化已禁用&quot;);</span>
+<span class="fc" id="L35">                return;</span>
+            }
+<span class="nc" id="L37">            initExperts();</span>
+<span class="nc" id="L38">            initUserAuths();</span>
+<span class="nc" id="L39">        };</span>
+    }
+
+    private void initExperts() {
+<span class="nc bnc" id="L43" title="All 2 branches missed.">        if (expertRepository.count() == 0) {</span>
+<span class="nc" id="L44">            createExpertData();</span>
+        }
+<span class="nc" id="L46">    }</span>
+
+    private void createExpertData() {
+<span class="nc" id="L49">        Expert[] experts = {</span>
+<span class="nc" id="L50">            createExpert(&quot;张医生&quot;, &quot;抑郁症治疗&quot;, &quot;zhang@psychology.com&quot;, &quot;online&quot;),</span>
+<span class="nc" id="L51">            createExpert(&quot;李咨询师&quot;, &quot;焦虑症咨询&quot;, &quot;li@psychology.com&quot;, &quot;offline&quot;),</span>
+<span class="nc" id="L52">            createExpert(&quot;王心理师&quot;, &quot;青少年心理辅导&quot;, &quot;wang@psychology.com&quot;, &quot;online&quot;),</span>
+<span class="nc" id="L53">            createExpert(&quot;陈咨询师&quot;, &quot;婚姻家庭咨询&quot;, &quot;chen@psychology.com&quot;, &quot;online&quot;),</span>
+<span class="nc" id="L54">            createExpert(&quot;刘专家&quot;, &quot;创伤后应激障碍治疗&quot;, &quot;liu@psychology.com&quot;, &quot;offline&quot;)</span>
+        };
+
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        for (Expert expert : experts) {</span>
+<span class="nc" id="L58">            expertRepository.save(expert);</span>
+        }
+<span class="nc" id="L60">    }</span>
+
+    private Expert createExpert(String name, String specialty, String contact, String status) {
+<span class="nc" id="L63">        Expert expert = new Expert();</span>
+<span class="nc" id="L64">        expert.setName(name);</span>
+<span class="nc" id="L65">        expert.setSpecialty(specialty);</span>
+<span class="nc" id="L66">        expert.setContact(contact);</span>
+<span class="nc" id="L67">        expert.setStatus(status);</span>
+<span class="nc" id="L68">        return expert;</span>
+    }
+
+    private void initUserAuths() {
+<span class="nc" id="L72">        long usersWithoutAuth = userRepository.findAll().stream()</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            .filter(user -&gt; user.getUserAuth() == null)</span>
+<span class="nc" id="L74">            .count();</span>
+
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (usersWithoutAuth &gt; 0) {</span>
+<span class="nc" id="L77">            createSpecialUserAuths();</span>
+<span class="nc" id="L78">            createTestUserAuths();</span>
+        }
+<span class="nc" id="L80">    }</span>
+
+    private void createSpecialUserAuths() {
+<span class="nc" id="L83">        String[][] specialUsers = {</span>
+            {&quot;7&quot;, &quot;000000&quot;, &quot;user7@mentara.com&quot;},      // 智慧的彩虹97
+            {&quot;8&quot;, &quot;000000&quot;, &quot;admin@mentara.com&quot;},      // 管理员
+            {&quot;9&quot;, &quot;000000&quot;, &quot;admin2@mentara.com&quot;},     // 快乐的小鸟69
+            {&quot;10&quot;, &quot;000000&quot;, &quot;user10@mentara.com&quot;},    // 温柔的海豚407
+            {&quot;11&quot;, &quot;000000&quot;, &quot;user11@mentara.com&quot;},    // 友善的彩虹263
+            {&quot;12&quot;, &quot;000000&quot;, &quot;user12@mentara.com&quot;}     // 细心的小狼139
+        };
+
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        for (String[] userInfo : specialUsers) {</span>
+<span class="nc" id="L93">            Long userId = Long.parseLong(userInfo[0]);</span>
+<span class="nc" id="L94">            String password = userInfo[1];</span>
+<span class="nc" id="L95">            String email = userInfo[2];</span>
+
+<span class="nc" id="L97">            userRepository.findById(userId).ifPresent(user -&gt; {</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">                if (user.getUserAuth() == null) {</span>
+<span class="nc" id="L99">                    createUserAuth(user, email, password);</span>
+                }
+<span class="nc" id="L101">            });</span>
+        }
+<span class="nc" id="L103">    }</span>
+
+    private void createTestUserAuths() {
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        for (int i = 1; i &lt;= 100; i++) {</span>
+<span class="nc" id="L107">            final int testNum = i;</span>
+<span class="nc" id="L108">            userRepository.findAll().stream()</span>
+<span class="nc bnc" id="L109" title="All 4 branches missed.">                .filter(user -&gt; user.getNickname() != null &amp;&amp; user.getNickname().equals(&quot;测试用户&quot; + testNum))</span>
+<span class="nc" id="L110">                .findFirst()</span>
+<span class="nc" id="L111">                .ifPresent(user -&gt; {</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                    if (user.getUserAuth() == null) {</span>
+<span class="nc" id="L113">                        createUserAuth(user, &quot;testuser@&quot; + testNum + &quot;.com&quot;, &quot;000000&quot;);</span>
+                    }
+<span class="nc" id="L115">                });</span>
+        }
+<span class="nc" id="L117">    }</span>
+
+    private void createUserAuth(User user, String email, String password) {
+<span class="nc" id="L120">        UserAuth userAuth = new UserAuth();</span>
+<span class="nc" id="L121">        userAuth.setUser(user);</span>
+<span class="nc" id="L122">        userAuth.setEmail(email);</span>
+<span class="nc" id="L123">        userAuth.setPassword(passwordEncoder.encode(password));</span>
+<span class="nc" id="L124">        user.setUserAuth(userAuth);</span>
+<span class="nc" id="L125">        userRepository.save(user);</span>
+<span class="nc" id="L126">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

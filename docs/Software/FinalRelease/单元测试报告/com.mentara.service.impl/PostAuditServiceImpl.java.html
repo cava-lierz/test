@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostAuditServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">PostAuditServiceImpl.java</span></div><h1>PostAuditServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mentara.dto.response.PostAuditResponse;
+import com.mentara.entity.Post;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.repository.PostRepository;
+import com.mentara.service.DeepSeekService;
+import com.mentara.service.PostAuditService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+/**
+ * Post内容审核服务实现类
+ */
+<span class="fc" id="L17">@Slf4j</span>
+@Service
+<span class="fc" id="L19">@RequiredArgsConstructor</span>
+public class PostAuditServiceImpl implements PostAuditService {
+    
+    private final DeepSeekService deepSeekService;
+    private final PostRepository postRepository;
+    private final ObjectMapper objectMapper;
+    
+    @Override
+    public PostAuditResponse auditPostContent(Post post) {
+        try {
+<span class="fc" id="L29">            log.info(&quot;开始审核Post内容，标题: {}&quot;, post.getTitle());</span>
+            
+            // 构建发送给DeepSeek的提示信息
+<span class="fc" id="L32">            String prompt = buildContentAuditPrompt(post);</span>
+            
+            // 调用DeepSeek API进行审核
+<span class="fc" id="L35">            String jsonResponse = deepSeekService.generateResponse(prompt, &quot;deepseek-chat&quot;);</span>
+            
+            // 解析JSON响应
+<span class="fc" id="L38">            PostAuditResponse auditResponse = parseAuditResponse(jsonResponse);</span>
+            
+<span class="fc" id="L40">            log.info(&quot;Post内容审核完成，结果: {}&quot;, auditResponse.getIsCompliant());</span>
+<span class="fc" id="L41">            return auditResponse;</span>
+            
+<span class="nc" id="L43">        } catch (Exception e) {</span>
+<span class="nc" id="L44">            log.error(&quot;审核Post内容时发生异常&quot;, e);</span>
+            // 返回默认的审核结果
+<span class="nc" id="L46">            return PostAuditResponse.builder()</span>
+<span class="nc" id="L47">                    .isCompliant(false)</span>
+<span class="nc" id="L48">                    .auditReason(&quot;审核过程中发生错误，建议人工审核&quot;)</span>
+<span class="nc" id="L49">                    .needAdminCheck(true)</span>
+<span class="nc" id="L50">                    .build();</span>
+        }
+    }
+    
+    @Override
+    public PostAuditResponse auditPostById(Long postId) {
+        try {
+            // 根据Post ID查找帖子
+<span class="nc" id="L58">            Post post = postRepository.findById(postId)</span>
+<span class="nc" id="L59">                    .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+            
+<span class="nc" id="L61">            return auditPostContent(post);</span>
+            
+<span class="nc" id="L63">        } catch (Exception e) {</span>
+<span class="nc" id="L64">            log.error(&quot;根据Post ID审核内容时发生异常，postId: {}&quot;, postId, e);</span>
+<span class="nc" id="L65">            return PostAuditResponse.builder()</span>
+<span class="nc" id="L66">                    .isCompliant(false)</span>
+<span class="nc" id="L67">                    .auditReason(&quot;查找帖子时发生错误&quot;)</span>
+<span class="nc" id="L68">                    .needAdminCheck(true)</span>
+<span class="nc" id="L69">                    .build();</span>
+        }
+    }
+    
+    @Override
+    public PostAuditResponse auditPostContent(String title, String content) {
+        // 创建一个临时的Post对象用于审核
+<span class="nc" id="L76">        Post tempPost = new Post();</span>
+<span class="nc" id="L77">        tempPost.setTitle(title);</span>
+<span class="nc" id="L78">        tempPost.setContent(content);</span>
+<span class="nc" id="L79">        tempPost.setIsAnnouncement(false);</span>
+        
+<span class="nc" id="L81">        return auditPostContent(tempPost);</span>
+    }
+    
+    /**
+     * 构建内容审核提示信息
+     */
+    private String buildContentAuditPrompt(Post post) {
+<span class="fc" id="L88">        return String.format(&quot;&quot;&quot;</span>
+            你是一个内容审核专家，拥有较高的审核权限。请审核以下帖子内容是否符合社区规范：
+            
+            帖子标题：%s
+            帖子内容：%s
+            是否为公告：%s
+            
+            请严格按照以下JSON格式返回审核结果：
+            {
+                &quot;isCompliant&quot;: true/false,
+                &quot;auditReason&quot;: &quot;审核理由说明&quot;,
+                &quot;needAdminCheck&quot;: true/false
+            }
+            
+            审核标准（宽松版）：
+            1. 允许轻微的不文明用语，只要不影响社区整体环境
+            2. 允许合理的情绪表达，包括轻微的抱怨和吐槽
+            3. 允许适度的争议性话题讨论，只要不涉及人身攻击
+            4. 允许商业推广，但必须是合法且不欺诈的
+            5. 公告帖子需要稍严格的审核标准
+            
+            严重违规标准（AI可直接删除）：
+            1. 违法内容：涉及法律禁止的内容，如暴力、色情、毒品等
+            2. 严重暴力：包含具体暴力行为描述或威胁
+            3. 严重歧视：针对特定群体的恶意歧视言论
+            4. 严重骚扰：恶意骚扰、人肉搜索等
+            5. 严重欺诈：明显的诈骗、虚假广告等
+            6. 严重垃圾信息：大量重复、无意义的垃圾内容
+            
+            审核建议：
+            - 对于轻微不文明但无恶意的内容，可以宽容处理
+            - 对于有争议但理性讨论的内容，可以允许
+            - 对于明显违规的内容，AI有权直接拒绝
+            - 对于难以判断的内容，建议人工审核
+            
+            请根据内容的严重程度和社区影响，给出合理的审核结果。
+            &quot;&quot;&quot;, 
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">            post.getTitle() != null ? post.getTitle() : &quot;无标题&quot;,</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">            post.getContent() != null ? post.getContent() : &quot;无内容&quot;,</span>
+<span class="pc bpc" id="L127" title="1 of 4 branches missed.">            post.getIsAnnouncement() != null &amp;&amp; post.getIsAnnouncement() ? &quot;是&quot; : &quot;否&quot;</span>
+        );
+    }
+    
+    /**
+     * 解析审核响应
+     */
+    private PostAuditResponse parseAuditResponse(String jsonResponse) {
+        try {
+            // 清理JSON字符串
+<span class="fc" id="L137">            String cleanJson = jsonResponse</span>
+<span class="fc" id="L138">                    .replaceFirst(&quot;^\\s*```json\\s*&quot;, &quot;&quot;)</span>
+<span class="fc" id="L139">                    .replaceFirst(&quot;\\s*```\\s*$&quot;, &quot;&quot;);</span>
+            
+<span class="fc" id="L141">            return objectMapper.readValue(cleanJson, PostAuditResponse.class);</span>
+            
+<span class="nc" id="L143">        } catch (Exception e) {</span>
+<span class="nc" id="L144">            log.error(&quot;解析审核响应失败: {}&quot;, e.getMessage());</span>
+            // 如果解析失败，返回默认结果
+<span class="nc" id="L146">            return PostAuditResponse.builder()</span>
+<span class="nc" id="L147">                    .isCompliant(false)</span>
+<span class="nc" id="L148">                    .auditReason(&quot;响应解析失败，建议人工审核&quot;)</span>
+<span class="nc" id="L149">                    .needAdminCheck(true)</span>
+<span class="nc" id="L150">                    .build();</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

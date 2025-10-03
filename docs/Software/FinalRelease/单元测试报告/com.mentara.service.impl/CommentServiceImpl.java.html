@@ -1,0 +1,796 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommentServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">CommentServiceImpl.java</span></div><h1>CommentServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.request.CommentRequest;
+import com.mentara.dto.response.CommentResponse;
+import com.mentara.entity.Comment;
+import com.mentara.entity.Post;
+import com.mentara.entity.User;
+import com.mentara.exception.UnauthorizedException;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.repository.CommentRepository;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.repository.CommentLikeRepository;
+import com.mentara.repository.CommentReportRepository;
+import com.mentara.converter.CommentConverter;
+import com.mentara.service.CommentService;
+import com.mentara.service.NotificationService;
+import com.mentara.service.UserService;
+import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import com.mentara.entity.CommentLike;
+import com.mentara.entity.CommentReport;
+import com.mentara.converter.NotificationResponseFactory;
+import com.mentara.dto.response.ReportedCommentResponse;
+import com.mentara.dto.request.CommentReportAuditRequest;
+import com.mentara.dto.response.CommentReportAuditResponse;
+import com.mentara.service.CommentReportAuditService;
+import org.springframework.context.ApplicationContext;
+import org.springframework.scheduling.annotation.Async;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
+
+import java.util.Optional;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.time.LocalDateTime;
+
+@Service
+<span class="fc" id="L45">public class CommentServiceImpl implements CommentService {</span>
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private CommentLikeRepository commentLikeRepository;
+
+    @Autowired
+    private CommentConverter commentConverter;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private CommentReportRepository commentReportRepository;
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private CommentReportAuditService commentReportAuditService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public CommentResponse createComment(CommentRequest commentRequest, Long authorId) {
+<span class="fc" id="L81">        User author = userRepository.findById(authorId)</span>
+<span class="pc" id="L82">                .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, authorId));</span>
+
+<span class="fc" id="L84">        Comment comment = new Comment();</span>
+<span class="fc" id="L85">        Comment savedComment = null;</span>
+<span class="fc" id="L86">        comment.setContent(commentRequest.getContent());</span>
+<span class="fc" id="L87">        comment.setAuthor(author);</span>
+
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">        if (commentRequest.getParentId() == null) {</span>
+            // It's a top-level comment
+<span class="fc" id="L91">            Post post = postRepository.findById(commentRequest.getPostId())</span>
+<span class="pc" id="L92">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, commentRequest.getPostId()));</span>
+<span class="fc" id="L93">            comment.setPost(post);</span>
+<span class="fc" id="L94">            savedComment = commentRepository.save(comment);</span>
+<span class="fc" id="L95">            notificationService.createAndSendPostReplyNotification(post, savedComment, author);</span>
+<span class="pc bnc" id="L96" title="All 2 branches missed.">        } else if (commentRequest.getTopCommentId() != null) {</span>
+            // It's a reply to the top comment or to a reply
+<span class="nc" id="L98">            Comment parentComment = commentRepository.findById(commentRequest.getParentId())</span>
+<span class="nc" id="L99">                    .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Parent Comment&quot;, &quot;id&quot;, commentRequest.getParentId()));</span>
+<span class="nc" id="L100">            Comment topComment = commentRepository.findById(commentRequest.getTopCommentId())</span>
+<span class="nc" id="L101">                    .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Top Comment&quot;, &quot;id&quot;, commentRequest.getTopCommentId()));</span>
+            
+            // 检查父评论和顶级评论是否已被软删除
+<span class="nc bnc" id="L104" title="All 2 branches missed.">            if (parentComment.getIsDeleted()) {</span>
+<span class="nc" id="L105">                throw new RuntimeException(&quot;无法回复已删除的评论&quot;);</span>
+            }
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            if (topComment.getIsDeleted()) {</span>
+<span class="nc" id="L108">                throw new RuntimeException(&quot;无法回复已删除的评论&quot;);</span>
+            }
+            
+<span class="nc" id="L111">            comment.setParent(parentComment);</span>
+<span class="nc" id="L112">            comment.setTopComment(topComment);</span>
+<span class="nc" id="L113">            comment.setPost(parentComment.getPost());</span>
+<span class="nc" id="L114">            commentRepository.updateReplyCount(commentRequest.getTopCommentId(), 1);</span>
+<span class="nc" id="L115">            savedComment = commentRepository.save(comment);</span>
+<span class="nc" id="L116">            notificationService.createAndSendCommentReplyNotification(parentComment, savedComment, author);</span>
+<span class="nc" id="L117">        } else {</span>
+<span class="nc" id="L118">            throw new IllegalArgumentException(&quot;Comment request is invalid.&quot;);</span>
+        }
+
+<span class="fc" id="L121">        postRepository.updateCommentCount(commentRequest.getPostId(), 1);</span>
+<span class="fc" id="L122">        return commentConverter.toResponse(</span>
+<span class="fc" id="L123">                savedComment, isCommentLikedByUser(comment.getId(), authorId), authorId);</span>
+    }
+
+    @Override
+    public Page&lt;CommentResponse&gt; getCommentsOfPost(Long postId, Pageable pageable, Long currentUserId) {
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        if (!postRepository.existsById(postId)) {</span>
+<span class="nc" id="L129">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        // 使用软删除查询方法，只查询未删除的评论
+<span class="fc" id="L132">        Page&lt;Comment&gt; topLevelComments = commentRepository.findByPostIdAndParentIsNullAndIsDeletedFalseOrderByCreatedAtAsc(postId, pageable);</span>
+<span class="fc" id="L133">        return optimizeCommentResponsePage(topLevelComments, currentUserId);</span>
+    }
+
+    @Override
+    public Page&lt;CommentResponse&gt; getRepliesOfComment(Long commentId, Pageable pageable, Long currentUserId) {
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">        if (!commentRepository.existsById(commentId)) {</span>
+<span class="nc" id="L139">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        // 使用软删除查询方法，只查询未删除的回复
+<span class="fc" id="L142">        Page&lt;Comment&gt; replies = commentRepository.findByParentIdAndIsDeletedFalseOrderByCreatedAtAsc(commentId, pageable);</span>
+<span class="fc" id="L143">        return optimizeCommentResponsePage(replies, currentUserId);</span>
+    }
+
+    @Override
+    public CommentResponse getComment(Long commentId, Long currentUserId) {
+<span class="fc" id="L148">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="fc" id="L149">                .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L152" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L153">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        
+<span class="fc" id="L156">        return commentConverter.toResponse(comment, isCommentLikedByUser(commentId, currentUserId), currentUserId);</span>
+    }
+
+    @Override
+    public Page&lt;CommentResponse&gt; getRepliesOfTopComment(Long commentId, Pageable pageable, Long currentUserId) {
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (!commentRepository.existsById(commentId)) {</span>
+<span class="nc" id="L162">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        // 使用软删除查询方法，只查询未删除的回复
+<span class="fc" id="L165">        Page&lt;Comment&gt; replies = commentRepository.findByTopCommentIdAndIsDeletedFalseOrderByCreatedAtAsc(commentId, pageable);</span>
+<span class="fc" id="L166">        return optimizeCommentResponsePage(replies, currentUserId);</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void likeComment(Long commentId, Long userId) {
+<span class="fc" id="L173">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="fc" id="L174">        Optional&lt;User&gt; userOpt = userRepository.findById(userId);</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">        if (commentOpt.isEmpty()) {</span>
+<span class="fc" id="L176">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L179">            throw new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId);</span>
+        }
+<span class="fc" id="L181">        Comment comment = commentOpt.get();</span>
+<span class="fc" id="L182">        User user = userOpt.get();</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L186">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if (!commentLikeRepository.existsByCommentAndUser(comment, user)) {</span>
+<span class="fc" id="L190">            CommentLike like = new CommentLike();</span>
+<span class="fc" id="L191">            like.setComment(comment);</span>
+<span class="fc" id="L192">            like.setUser(user);</span>
+<span class="fc" id="L193">            commentLikeRepository.save(like);</span>
+<span class="fc" id="L194">            commentRepository.updateLikeCount(commentId, 1);</span>
+<span class="fc" id="L195">            notificationService.createAndSendCommentLikeNotification(comment, user);</span>
+        }
+<span class="fc" id="L197">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void unlikeComment(Long commentId, Long userId) {
+<span class="fc" id="L203">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="fc" id="L204">        Optional&lt;User&gt; userOpt = userRepository.findById(userId);</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (commentOpt.isEmpty()) {</span>
+<span class="nc" id="L206">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L209">            throw new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId);</span>
+        }
+<span class="fc" id="L211">        Comment comment = commentOpt.get();</span>
+<span class="fc" id="L212">        User user = userOpt.get();</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L216">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if (commentLikeRepository.existsByCommentAndUser(comment, user)) {</span>
+<span class="fc" id="L220">            commentLikeRepository.deleteByCommentAndUser(comment, user);</span>
+<span class="fc" id="L221">            commentRepository.updateLikeCount(commentId, -1);</span>
+        }
+<span class="fc" id="L223">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void deleteComment(Long commentId, Long userId) {
+<span class="fc" id="L229">        System.out.println(&quot;开始删除评论: commentId=&quot; + commentId + &quot;, userId=&quot; + userId);</span>
+        
+<span class="fc" id="L231">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="fc" id="L232">        Optional&lt;User&gt; userOpt = userRepository.findById(userId);</span>
+        
+<span class="fc bfc" id="L234" title="All 2 branches covered.">        if (commentOpt.isEmpty()) {</span>
+<span class="fc" id="L235">            System.out.println(&quot;评论不存在: commentId=&quot; + commentId);</span>
+<span class="fc" id="L236">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L239">            System.out.println(&quot;用户不存在: userId=&quot; + userId);</span>
+<span class="nc" id="L240">            throw new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId);</span>
+        }
+        
+<span class="fc" id="L243">        Comment comment = commentOpt.get();</span>
+<span class="fc" id="L244">        User user = userOpt.get();</span>
+        
+<span class="fc" id="L246">        System.out.println(&quot;找到评论: commentId=&quot; + commentId + &quot;, authorId=&quot; + comment.getAuthor().getId());</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L250">            System.out.println(&quot;评论已被删除: commentId=&quot; + commentId);</span>
+<span class="nc" id="L251">            throw new RuntimeException(&quot;评论已被删除，无需重复删除&quot;);</span>
+        }
+        
+        // 直接验证权限，避免重复查询
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">        if (!comment.getAuthor().getId().equals(userId)) {</span>
+<span class="nc" id="L256">            System.out.println(&quot;权限验证失败: commentAuthorId=&quot; + comment.getAuthor().getId() + &quot;, currentUserId=&quot; + userId);</span>
+<span class="nc" id="L257">            throw new UnauthorizedException(&quot;你不能删除该评论.&quot;);</span>
+        }
+        
+<span class="fc" id="L260">        System.out.println(&quot;权限验证通过，开始软删除评论&quot;);</span>
+        
+        // 更新评论数量（在软删除前）
+<span class="fc" id="L263">        updateCommentCountsOnSoftDelete(comment);</span>
+        
+        // 软删除评论
+<span class="fc" id="L266">        comment.setIsDeleted(true);</span>
+<span class="fc" id="L267">        comment.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L268">        comment.setDeletedBy(userId);</span>
+<span class="fc" id="L269">        comment.setDeleteReason(&quot;用户删除&quot;);</span>
+        
+<span class="fc" id="L271">        commentRepository.save(comment);</span>
+        
+<span class="fc" id="L273">        System.out.println(&quot;评论软删除完成: commentId=&quot; + commentId);</span>
+<span class="fc" id="L274">    }</span>
+    
+    @Override
+    public boolean isCommentLikedByUser(Long commentId, Long userId) {
+<span class="fc" id="L278">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="fc" id="L279">        Optional&lt;User&gt; userOpt = userRepository.findById(userId);</span>
+<span class="pc bpc" id="L280" title="1 of 4 branches missed.">        if (commentOpt.isPresent() &amp;&amp; userOpt.isPresent()) {</span>
+<span class="fc" id="L281">            Comment comment = commentOpt.get();</span>
+<span class="fc" id="L282">            User user = userOpt.get();</span>
+            
+            // 检查评论是否已被软删除
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">            if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L286">                return false; // 已删除的评论无法被点赞</span>
+            }
+            
+<span class="fc" id="L289">            return commentLikeRepository.existsByCommentAndUser(comment, user);</span>
+        }
+<span class="fc" id="L291">        return false;</span>
+    }
+
+    @Override
+    public boolean canUserDeleteComment(Long commentId, Long userId) {
+<span class="nc" id="L296">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="nc" id="L297">        Optional&lt;User&gt; userOpt = userRepository.findById(userId);</span>
+<span class="nc bnc" id="L298" title="All 4 branches missed.">        if (commentOpt.isPresent() &amp;&amp; userOpt.isPresent()) {</span>
+<span class="nc" id="L299">            Comment comment = commentOpt.get();</span>
+            
+            // 检查评论是否已被软删除
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L303">                return false; // 已删除的评论无法再次删除</span>
+            }
+            
+<span class="nc" id="L306">            return comment.getAuthor().getId().equals(userId);</span>
+        }
+<span class="nc" id="L308">        return false;</span>
+    }
+
+    @Override
+    public int calculateLastPageOfPost(Long postId, int size) {
+<span class="fc" id="L313">        Optional&lt;Post&gt; postOpt = postRepository.findById(postId);</span>
+<span class="pc bpc" id="L314" title="1 of 2 branches missed.">        if (postOpt.isEmpty()) {</span>
+<span class="nc" id="L315">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        // 使用软删除统计方法，只统计未删除的评论
+<span class="fc" id="L318">        int totalTopLevelComments = commentRepository.countByPostIdAndParentIsNullAndIsDeletedFalse(postId);</span>
+<span class="fc" id="L319">        int LastPage = (totalTopLevelComments - 1) / size;</span>
+<span class="fc" id="L320">        return LastPage;</span>
+    }
+
+    @Override
+    public int calculateLastPageOfTopComment(Long commentId, int size) {
+<span class="fc" id="L325">        Optional&lt;Comment&gt; commentOpt = commentRepository.findById(commentId);</span>
+<span class="pc bpc" id="L326" title="1 of 2 branches missed.">        if (commentOpt.isEmpty()) {</span>
+<span class="nc" id="L327">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        // 使用软删除统计方法，只统计未删除的回复
+<span class="fc" id="L330">        int totalReplies = commentRepository.countByTopCommentIdAndIsDeletedFalse(commentId);</span>
+<span class="fc" id="L331">        int LastPage = (totalReplies - 1) / size;</span>
+<span class="fc" id="L332">        return LastPage;</span>
+    }
+
+    @Override
+    public int calculatePageOfReplyInTopComment(Long parentId, int size) {
+<span class="fc" id="L337">        Comment comment = commentRepository.findById(parentId)</span>
+<span class="fc" id="L338">                .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, parentId));</span>
+        
+        // 使用软删除统计方法，只统计未删除的回复
+<span class="fc" id="L341">        int totalRepliesBefore = commentRepository.countRepliesBeforeInTopCommentAndIsDeletedFalse(comment.getTopComment().getId(), comment.getCreatedAt());</span>
+<span class="fc" id="L342">        int page = totalRepliesBefore / size;</span>
+<span class="fc" id="L343">        return page;</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void reportComment(Long commentId, Long currentUserId, String reason) {
+<span class="fc" id="L350">        System.out.println(&quot;=== 开始处理评论举报请求 ===&quot;);</span>
+<span class="fc" id="L351">        System.out.println(&quot;commentId: &quot; + commentId + &quot;, currentUserId: &quot; + currentUserId + &quot;, reason: &quot; + reason);</span>
+<span class="fc" id="L352">        System.out.println(&quot;当前线程: &quot; + Thread.currentThread().getName());</span>
+        
+<span class="fc" id="L354">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="fc" id="L355">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+<span class="fc" id="L357">        User user = userService.findById(currentUserId)</span>
+<span class="pc" id="L358">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, currentUserId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L361" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L362">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        
+        // 检查是否是自己的评论
+<span class="pc bpc" id="L366" title="1 of 2 branches missed.">        if (comment.getAuthor().getId().equals(currentUserId)) {</span>
+<span class="nc" id="L367">            throw new RuntimeException(&quot;不能举报自己的评论&quot;);</span>
+        }
+        
+        // 检查是否是管理员的评论
+<span class="pc bpc" id="L371" title="1 of 2 branches missed.">        if (comment.getAuthor().getRole().name().equals(&quot;ADMIN&quot;)) {</span>
+<span class="nc" id="L372">            throw new RuntimeException(&quot;管理员的评论不可被举报&quot;);</span>
+        }
+        
+        // 检查是否已经举报过
+<span class="pc bpc" id="L376" title="1 of 2 branches missed.">        if (commentReportRepository.existsByUserAndComment(user, comment)) {</span>
+<span class="nc" id="L377">            throw new RuntimeException(&quot;您已经举报过这个评论&quot;);</span>
+        }
+        
+<span class="fc" id="L380">        System.out.println(&quot;=== 开始同步处理评论举报记录 ===&quot;);</span>
+<span class="fc" id="L381">        long syncStartTime = System.currentTimeMillis();</span>
+        
+        // 创建举报记录
+<span class="fc" id="L384">        CommentReport report = new CommentReport(user, comment, reason);</span>
+<span class="fc" id="L385">        report = commentReportRepository.save(report);</span>
+        
+        // 增加评论的举报次数
+<span class="fc" id="L388">        Integer currentReportCount = comment.getReportCount();</span>
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">        if (currentReportCount == null) {</span>
+<span class="nc" id="L390">            currentReportCount = 0;</span>
+        }
+<span class="fc" id="L392">        comment.setReportCount(currentReportCount + 1);</span>
+<span class="fc" id="L393">        commentRepository.save(comment);</span>
+        
+        // 增加被举报用户的举报次数（持久化存储）
+<span class="fc" id="L396">        userService.incrementReportedCount(comment.getAuthor().getId());</span>
+
+<span class="fc" id="L398">        long syncEndTime = System.currentTimeMillis();</span>
+<span class="fc" id="L399">        System.out.println(&quot;=== 同步处理完成，耗时: &quot; + (syncEndTime - syncStartTime) + &quot;ms ===&quot;);</span>
+
+        // 异步处理AI审核 - 通过ApplicationContext调用确保AOP代理生效
+<span class="fc" id="L402">        System.out.println(&quot;=== 开始异步处理AI审核 ===&quot;);</span>
+<span class="fc" id="L403">        CommentServiceImpl self = applicationContext.getBean(CommentServiceImpl.class);</span>
+<span class="fc" id="L404">        self.processCommentReportAuditAsync(report, comment, reason);</span>
+<span class="fc" id="L405">        System.out.println(&quot;=== 异步处理已启动，主线程继续执行 ===&quot;);</span>
+<span class="fc" id="L406">    }</span>
+
+    @Override
+    public Page&lt;ReportedCommentResponse&gt; getReportedComments(Pageable pageable) {
+        // 只返回被举报且未删除的评论（举报次数大于0）
+<span class="fc" id="L411">        return commentRepository.findByIsDeletedFalseAndReportCountGreaterThanOrderByReportCountDesc(pageable)</span>
+<span class="fc" id="L412">            .map(this::convertToReportedCommentResponse);</span>
+    }
+
+    @Override
+    public Page&lt;ReportedCommentResponse&gt; getWaitingCommentReports(Pageable pageable) {
+        // 返回等待人工审核的评论举报
+<span class="fc" id="L418">        return commentReportRepository.findByStateOrderByCreatedAtDesc(CommentReport.State.WAITING, pageable)</span>
+<span class="pc" id="L419">            .map(report -&gt; convertToReportedCommentResponse(report.getComment()));</span>
+    }
+
+    @Override
+    public Page&lt;ReportedCommentResponse&gt; getValidCommentReports(Pageable pageable) {
+        // 返回举报有效的评论（已被删除的评论）
+<span class="nc" id="L425">        return commentRepository.findByIsDeletedTrueAndReportCountGreaterThanOrderByDeletedAtDesc(pageable)</span>
+<span class="nc" id="L426">            .map(this::convertToReportedCommentResponse);</span>
+    }
+
+    @Override
+    public Page&lt;ReportedCommentResponse&gt; getInvalidCommentReports(Pageable pageable) {
+        // 返回举报无效的评论（举报被驳回，评论保持有效）
+<span class="fc" id="L432">        return commentReportRepository.findByStateOrderByCreatedAtDesc(CommentReport.State.INVALID, pageable)</span>
+<span class="pc" id="L433">            .map(report -&gt; convertToReportedCommentResponse(report.getComment()));</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void deleteCommentByAdmin(Long commentId) {
+<span class="fc" id="L440">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="pc" id="L441">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L444" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L445">            throw new RuntimeException(&quot;评论已被删除，无需重复删除&quot;);</span>
+        }
+        
+        // 删除所有举报记录（处理举报），但不重置评论的举报次数
+        // 被举报的历史事实保持不变
+<span class="fc" id="L450">        commentReportRepository.deleteByCommentId(commentId);</span>
+        
+        // 更新评论数量（在软删除前）
+<span class="fc" id="L453">        updateCommentCountsOnSoftDelete(comment);</span>
+        
+        // 软删除评论
+<span class="fc" id="L456">        comment.setIsDeleted(true);</span>
+<span class="fc" id="L457">        comment.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L458">        comment.setDeletedBy(null); // 管理员删除</span>
+<span class="fc" id="L459">        comment.setDeleteReason(&quot;管理员删除&quot;);</span>
+        
+<span class="fc" id="L461">        commentRepository.save(comment);</span>
+<span class="fc" id="L462">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void forceDeleteComment(Long commentId) {
+<span class="fc" id="L468">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="pc" id="L469">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L472" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L473">            throw new RuntimeException(&quot;评论已被删除，无需重复删除&quot;);</span>
+        }
+        
+        // 更新评论数量（在软删除前）
+<span class="fc" id="L477">        updateCommentCountsOnSoftDelete(comment);</span>
+        
+        // 管理员强制删除评论：软删除
+<span class="fc" id="L480">        comment.setIsDeleted(true);</span>
+<span class="fc" id="L481">        comment.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L482">        comment.setDeletedBy(null);</span>
+<span class="fc" id="L483">        comment.setDeleteReason(&quot;管理员强制删除&quot;);</span>
+        
+<span class="fc" id="L485">        commentRepository.save(comment);</span>
+<span class="fc" id="L486">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void approveCommentReport(Long commentId) {
+<span class="fc" id="L492">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="pc" id="L493">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="nc bnc" id="L496" title="All 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L497">            throw new RuntimeException(&quot;评论已被删除，无需重复处理&quot;);</span>
+        }
+        
+        // 更新评论数量（在软删除前）
+<span class="nc" id="L501">        updateCommentCountsOnSoftDelete(comment);</span>
+        
+        // 软删除评论
+<span class="nc" id="L504">        comment.setIsDeleted(true);</span>
+<span class="nc" id="L505">        comment.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L506">        comment.setDeletedBy(null); // 管理员删除</span>
+<span class="nc" id="L507">        comment.setDeleteReason(&quot;管理员通过举报删除&quot;);</span>
+        
+        // 更新所有相关举报记录的状态为VALID
+<span class="nc" id="L510">        List&lt;CommentReport&gt; reports = commentReportRepository.findByCommentOrderByCreatedAtDesc(comment);</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        for (CommentReport report : reports) {</span>
+<span class="nc" id="L512">            report.setState(CommentReport.State.VALID);</span>
+<span class="nc" id="L513">        }</span>
+<span class="nc" id="L514">        commentReportRepository.saveAll(reports);</span>
+        
+<span class="nc" id="L516">        commentRepository.save(comment);</span>
+<span class="nc" id="L517">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void ignoreCommentReports(Long commentId) {
+<span class="fc" id="L523">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="pc" id="L524">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+        // 检查评论是否已被软删除
+<span class="pc bpc" id="L527" title="1 of 2 branches missed.">        if (comment.getIsDeleted()) {</span>
+<span class="nc" id="L528">            throw new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId);</span>
+        }
+        
+        // 更新所有相关举报记录的状态为INVALID
+<span class="fc" id="L532">        List&lt;CommentReport&gt; reports = commentReportRepository.findByCommentOrderByCreatedAtDesc(comment);</span>
+<span class="pc bpc" id="L533" title="1 of 2 branches missed.">        for (CommentReport report : reports) {</span>
+<span class="nc" id="L534">            report.setState(CommentReport.State.INVALID);</span>
+<span class="nc" id="L535">        }</span>
+<span class="fc" id="L536">        commentReportRepository.saveAll(reports);</span>
+        
+        // 重置评论的举报次数为0
+<span class="fc" id="L539">        comment.setReportCount(0);</span>
+<span class="fc" id="L540">        commentRepository.save(comment);</span>
+<span class="fc" id="L541">    }</span>
+
+    @Override
+    public Integer getTotalReportedCommentsCount() {
+<span class="nc" id="L545">        return commentRepository.countByIsDeletedFalseAndReportCountGreaterThan();</span>
+    }
+
+    /**
+     * 异步处理评论举报并自动审核
+     */
+    @Async(&quot;aiAuditExecutor&quot;)
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void processCommentReportAuditAsync(CommentReport report, Comment comment, String reason) {
+<span class="fc" id="L554">        System.out.println(&quot;=== 异步线程开始处理评论AI审核 ===&quot;);</span>
+<span class="fc" id="L555">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="fc" id="L556">        System.out.println(&quot;commentId: &quot; + comment.getId() + &quot;, userId: &quot; + report.getUser().getId());</span>
+        
+<span class="fc" id="L558">        long asyncStartTime = System.currentTimeMillis();</span>
+        
+        try {
+<span class="fc" id="L561">            System.out.println(&quot;开始异步处理评论举报并自动审核，commentId : &quot;+comment.getId()+ &quot; userId :&quot; +report.getUser().getId());</span>
+
+            // 构建审核请求
+<span class="fc" id="L564">            CommentReportAuditRequest auditRequest = CommentReportAuditRequest.builder()</span>
+<span class="fc" id="L565">                    .reportReason(reason)</span>
+<span class="fc" id="L566">                    .commentContent(comment.getContent())</span>
+<span class="fc" id="L567">                    .authorUsername(comment.getAuthor().getUsername())</span>
+<span class="fc" id="L568">                    .postTitle(comment.getPost().getTitle())</span>
+<span class="fc" id="L569">                    .build();</span>
+
+<span class="fc" id="L571">            System.out.println(&quot;=== 开始调用AI审核服务 ===&quot;);</span>
+<span class="fc" id="L572">            long aiStartTime = System.currentTimeMillis();</span>
+            
+            // 执行AI审核
+<span class="fc" id="L575">            CommentReportAuditResponse auditResponse = commentReportAuditService.auditCommentReport(auditRequest);</span>
+
+<span class="fc" id="L577">            long aiEndTime = System.currentTimeMillis();</span>
+<span class="fc" id="L578">            System.out.println(&quot;=== AI审核完成，耗时: &quot; + (aiEndTime - aiStartTime) + &quot;ms ===&quot;);</span>
+
+            // 根据审核结果统一处理举报和评论状态
+<span class="pc bpc" id="L581" title="1 of 2 branches missed.">            if (auditResponse.getNeedAdminCheck()) {</span>
+<span class="nc" id="L582">                System.out.println(&quot;AI审核认为需要人工审核: &quot;+auditResponse.getAuditReason());</span>
+                // 举报设置为等待人工审核状态，保持reportCount &gt;0
+<span class="nc" id="L584">                report.setState(CommentReport.State.WAITING);</span>
+                // 保持reportCount &gt; 0，表示这是被举报的评论
+<span class="nc" id="L586">                commentReportRepository.save(report);</span>
+            } else {
+<span class="pc bpc" id="L588" title="1 of 2 branches missed.">                if (auditResponse.getIsValidReport()) {</span>
+<span class="nc" id="L589">                    System.out.println(&quot;AI审核认为举报有效，评论将被删除: &quot;+auditResponse.getAuditReason());</span>
+                    // 举报有效，评论被删除（保持reportCount &gt; 0，表示被举报删除）
+<span class="nc" id="L591">                    report.setState(CommentReport.State.VALID);</span>
+<span class="nc" id="L592">                    comment.setIsDeleted(true);</span>
+<span class="nc" id="L593">                    comment.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L594">                    comment.setDeletedBy(null); // AI删除</span>
+<span class="nc" id="L595">                    comment.setDeleteReason(&quot;AI审核举报有效：&quot; + auditResponse.getAuditReason());</span>
+                    // 保持reportCount &gt; 0，表示被举报删除
+<span class="nc" id="L597">                    commentReportRepository.save(report);</span>
+<span class="nc" id="L598">                    commentRepository.save(comment);</span>
+                } else {
+<span class="fc" id="L600">                    System.out.println(&quot;AI审核认为举报无效，评论保持有效: &quot;+auditResponse.getAuditReason());</span>
+                    // 举报无效，评论保持有效，保持reportCount &gt; 0
+<span class="fc" id="L602">                    report.setState(CommentReport.State.INVALID);</span>
+                    // 评论状态保持正常，reportCount &gt; 0表示被举报过
+<span class="nc" id="L604">                    commentReportRepository.save(report);</span>
+                }
+            }
+
+<span class="nc" id="L608">            long asyncEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L609">            System.out.println(&quot;=== 异步处理完成，总耗时: &quot; + (asyncEndTime - asyncStartTime) + &quot;ms ===&quot;);</span>
+
+<span class="fc" id="L611">        } catch (Exception e) {</span>
+<span class="fc" id="L612">            System.err.println(&quot;异步处理评论举报并自动审核时发生异常: &quot;+e.getMessage());</span>
+<span class="fc" id="L613">            e.printStackTrace();</span>
+            // 发生异常时，将举报状态设置为等待人工审核
+            try {
+<span class="fc" id="L616">                report.setState(CommentReport.State.WAITING);</span>
+                // 保持reportCount &gt; 0，表示这是被举报的评论
+<span class="fc" id="L618">                commentReportRepository.save(report);</span>
+<span class="fc" id="L619">                System.out.println(&quot;异常处理完成，举报状态已设置为等待人工审核&quot;);</span>
+<span class="fc" id="L620">            } catch (Exception saveException) {</span>
+<span class="fc" id="L621">                System.err.println(&quot;保存状态时发生异常: &quot;+saveException.getMessage());</span>
+<span class="fc" id="L622">            }</span>
+<span class="nc" id="L623">        }</span>
+<span class="fc" id="L624">    }</span>
+    
+    // ================== 新增软删除相关方法 ==================
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void restoreComment(Long commentId) {
+<span class="fc" id="L632">        Comment comment = commentRepository.findById(commentId)</span>
+<span class="fc" id="L633">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Comment&quot;, &quot;id&quot;, commentId));</span>
+        
+<span class="fc bfc" id="L635" title="All 2 branches covered.">        if (!comment.getIsDeleted()) {</span>
+<span class="fc" id="L636">            throw new RuntimeException(&quot;评论未被删除，无需恢复&quot;);</span>
+        }
+        
+        // 恢复评论
+<span class="fc" id="L640">        commentRepository.restoreComment(commentId);</span>
+        
+        // 更新评论数量（在恢复后）
+<span class="fc" id="L643">        updateCommentCountsOnRestore(comment);</span>
+<span class="fc" id="L644">    }</span>
+    
+    @Override
+    public Page&lt;CommentResponse&gt; getDeletedComments(Pageable pageable) {
+<span class="fc" id="L648">        return commentRepository.findByIsDeletedTrueOrderByDeletedAtDesc(pageable)</span>
+<span class="fc" id="L649">            .map(comment -&gt; commentConverter.toResponse(comment, false));</span>
+    }
+    
+    @Override
+    public Page&lt;CommentResponse&gt; getDeletedCommentsByUser(Long userId, Pageable pageable) {
+<span class="fc" id="L654">        return commentRepository.findByAuthorIdAndIsDeletedTrueOrderByDeletedAtDesc(userId, pageable)</span>
+<span class="pc" id="L655">            .map(comment -&gt; commentConverter.toResponse(comment, false));</span>
+    }
+
+    // 私有方法：软删除评论时更新评论数量
+    private void updateCommentCountsOnSoftDelete(Comment comment) {
+<span class="fc" id="L660">        System.out.println(&quot;开始更新软删除评论的数量: commentId=&quot; + comment.getId());</span>
+        
+        // 计算要删除的评论总数（包括当前评论及其所有回复）
+<span class="fc" id="L663">        int totalCommentsToDelete = 1; // 当前评论</span>
+        
+        // 如果当前评论是顶级评论，需要计算其所有回复数量
+<span class="pc bpc" id="L666" title="1 of 2 branches missed.">        if (comment.getTopComment() == null) {</span>
+            // 当前评论是顶级评论，计算其所有回复数量
+<span class="fc" id="L668">            totalCommentsToDelete += comment.getReplysCount();</span>
+        } else {
+            // 当前评论是回复，只需要计算其直接回复数量
+<span class="nc" id="L671">            totalCommentsToDelete += comment.getReplysCount();</span>
+        }
+        
+<span class="fc" id="L674">        System.out.println(&quot;要删除的评论总数: &quot; + totalCommentsToDelete + &quot; (包括 &quot; + comment.getReplysCount() + &quot; 个回复)&quot;);</span>
+        
+        // 更新父评论的回复数
+<span class="pc bpc" id="L677" title="1 of 2 branches missed.">        if (comment.getTopComment() != null) {</span>
+<span class="nc" id="L678">            System.out.println(&quot;更新父评论回复数: topCommentId=&quot; + comment.getTopComment().getId());</span>
+<span class="nc" id="L679">            commentRepository.updateReplyCount(comment.getTopComment().getId(), -1);</span>
+        }
+        
+        // 更新帖子的评论数（减去所有被删除的评论和回复）
+<span class="fc" id="L683">        System.out.println(&quot;更新帖子评论数: postId=&quot; + comment.getPost().getId() + &quot;, 减少数量=&quot; + totalCommentsToDelete);</span>
+<span class="fc" id="L684">        postRepository.updateCommentCount(comment.getPost().getId(), -totalCommentsToDelete);</span>
+        
+<span class="fc" id="L686">        System.out.println(&quot;软删除评论数量更新完成: commentId=&quot; + comment.getId());</span>
+<span class="fc" id="L687">    }</span>
+    
+    // 私有方法：恢复评论时更新评论数量
+    private void updateCommentCountsOnRestore(Comment comment) {
+<span class="fc" id="L691">        System.out.println(&quot;开始更新恢复评论的数量: commentId=&quot; + comment.getId());</span>
+        
+        // 计算要恢复的评论总数（包括当前评论及其所有回复）
+<span class="fc" id="L694">        int totalCommentsToRestore = 1; // 当前评论</span>
+        
+        // 如果当前评论是顶级评论，需要计算其所有回复数量
+<span class="pc bpc" id="L697" title="1 of 2 branches missed.">        if (comment.getTopComment() == null) {</span>
+            // 当前评论是顶级评论，计算其所有回复数量
+<span class="fc" id="L699">            totalCommentsToRestore += comment.getReplysCount();</span>
+        } else {
+            // 当前评论是回复，只需要计算其直接回复数量
+<span class="nc" id="L702">            totalCommentsToRestore += comment.getReplysCount();</span>
+        }
+        
+<span class="fc" id="L705">        System.out.println(&quot;要恢复的评论总数: &quot; + totalCommentsToRestore + &quot; (包括 &quot; + comment.getReplysCount() + &quot; 个回复)&quot;);</span>
+        
+        // 更新父评论的回复数
+<span class="pc bpc" id="L708" title="1 of 2 branches missed.">        if (comment.getTopComment() != null) {</span>
+<span class="nc" id="L709">            System.out.println(&quot;更新父评论回复数: topCommentId=&quot; + comment.getTopComment().getId());</span>
+<span class="nc" id="L710">            commentRepository.updateReplyCount(comment.getTopComment().getId(), 1);</span>
+        }
+        
+        // 更新帖子的评论数（加上所有被恢复的评论和回复）
+<span class="fc" id="L714">        System.out.println(&quot;更新帖子评论数: postId=&quot; + comment.getPost().getId() + &quot;, 增加数量=&quot; + totalCommentsToRestore);</span>
+<span class="fc" id="L715">        postRepository.updateCommentCount(comment.getPost().getId(), totalCommentsToRestore);</span>
+        
+<span class="fc" id="L717">        System.out.println(&quot;恢复评论数量更新完成: commentId=&quot; + comment.getId());</span>
+<span class="fc" id="L718">    }</span>
+
+    // 私有方法：删除评论及其所有回复（硬删除，保留用于参考）
+    private void deleteCommentAndReplies(Comment comment) {
+<span class="nc" id="L722">        System.out.println(&quot;开始删除评论及其回复: commentId=&quot; + comment.getId());</span>
+        
+        // 计算要删除的评论总数（包括当前评论及其所有回复）
+<span class="nc" id="L725">        int totalCommentsToDelete = 1; // 当前评论</span>
+        
+        // 如果当前评论是顶级评论，需要计算其所有回复数量
+<span class="nc bnc" id="L728" title="All 2 branches missed.">        if (comment.getTopComment() == null) {</span>
+            // 当前评论是顶级评论，计算其所有回复数量
+<span class="nc" id="L730">            totalCommentsToDelete += comment.getReplysCount();</span>
+        } else {
+            // 当前评论是回复，只需要计算其直接回复数量
+<span class="nc" id="L733">            totalCommentsToDelete += comment.getReplysCount();</span>
+        }
+        
+<span class="nc" id="L736">        System.out.println(&quot;要删除的评论总数: &quot; + totalCommentsToDelete + &quot; (包括 &quot; + comment.getReplysCount() + &quot; 个回复)&quot;);</span>
+        
+        // 更新父评论的回复数
+<span class="nc bnc" id="L739" title="All 2 branches missed.">        if (comment.getTopComment() != null) {</span>
+<span class="nc" id="L740">            System.out.println(&quot;更新父评论回复数: topCommentId=&quot; + comment.getTopComment().getId());</span>
+<span class="nc" id="L741">            commentRepository.updateReplyCount(comment.getTopComment().getId(), -1);</span>
+        }
+        
+        // 更新帖子的评论数（减去所有被删除的评论和回复）
+<span class="nc" id="L745">        System.out.println(&quot;更新帖子评论数: postId=&quot; + comment.getPost().getId() + &quot;, 减少数量=&quot; + totalCommentsToDelete);</span>
+<span class="nc" id="L746">        postRepository.updateCommentCount(comment.getPost().getId(), -totalCommentsToDelete);</span>
+        
+        // 删除评论（数据库会自动级联删除所有回复、点赞记录、举报记录等）
+<span class="nc" id="L749">        System.out.println(&quot;执行评论删除操作&quot;);</span>
+<span class="nc" id="L750">        commentRepository.delete(comment);</span>
+        
+<span class="nc" id="L752">        System.out.println(&quot;评论删除操作完成: commentId=&quot; + comment.getId());</span>
+<span class="nc" id="L753">    }</span>
+
+    // 私有方法：转换为ReportedCommentResponse
+    private ReportedCommentResponse convertToReportedCommentResponse(Comment comment) {
+<span class="nc" id="L757">        ReportedCommentResponse response = new ReportedCommentResponse();</span>
+<span class="nc" id="L758">        response.setId(comment.getId());</span>
+<span class="nc" id="L759">        response.setContent(comment.getContent());</span>
+<span class="nc bnc" id="L760" title="All 2 branches missed.">        response.setReportCount(comment.getReportCount() != null ? comment.getReportCount() : 0);</span>
+<span class="nc" id="L761">        response.setCreatedAt(comment.getCreatedAt());</span>
+<span class="nc" id="L762">        response.setAuthorName(comment.getAuthor().getUsername());</span>
+<span class="nc" id="L763">        response.setAuthorId(comment.getAuthor().getId());</span>
+<span class="nc" id="L764">        response.setPostId(comment.getPost().getId());</span>
+<span class="nc bnc" id="L765" title="All 2 branches missed.">        response.setPostTitle(comment.getPost().getContent().length() &gt; 50 ? </span>
+<span class="nc" id="L766">            comment.getPost().getContent().substring(0, 50) + &quot;...&quot; : </span>
+<span class="nc" id="L767">            comment.getPost().getContent());</span>
+<span class="nc bnc" id="L768" title="All 2 branches missed.">        response.setParentId(comment.getParent() != null ? comment.getParent().getId() : null);</span>
+<span class="nc bnc" id="L769" title="All 2 branches missed.">        response.setTopCommentId(comment.getTopComment() != null ? comment.getTopComment().getId() : null);</span>
+<span class="nc" id="L770">        response.setRepliesCount(comment.getReplysCount());</span>
+<span class="nc" id="L771">        response.setLikesCount(comment.getLikesCount());</span>
+<span class="nc" id="L772">        return response;</span>
+    }
+
+    // 私有方法：优化CommentResponse分页查询，避免N+1查询问题
+    private Page&lt;CommentResponse&gt; optimizeCommentResponsePage(Page&lt;Comment&gt; commentsPage, Long currentUserId) {
+<span class="fc" id="L777">        List&lt;Comment&gt; comments = commentsPage.getContent();</span>
+<span class="fc" id="L778">        Map&lt;Long, Boolean&gt; likeStatusMap = new HashMap&lt;&gt;();</span>
+        
+<span class="pc bpc" id="L780" title="1 of 4 branches missed.">        if (currentUserId != null &amp;&amp; !comments.isEmpty()) {</span>
+<span class="fc" id="L781">            List&lt;Long&gt; commentIds = comments.stream().map(Comment::getId).collect(Collectors.toList());</span>
+<span class="fc" id="L782">            List&lt;CommentLike&gt; userLikes = commentLikeRepository.findByUserIdAndCommentIdIn(currentUserId, commentIds);</span>
+<span class="fc" id="L783">            Set&lt;Long&gt; likedCommentIds = userLikes.stream()</span>
+<span class="fc" id="L784">                .map(like -&gt; like.getComment().getId())</span>
+<span class="fc" id="L785">                .collect(Collectors.toSet());</span>
+            
+<span class="fc bfc" id="L787" title="All 2 branches covered.">            for (Long commentId : commentIds) {</span>
+<span class="fc" id="L788">                likeStatusMap.put(commentId, likedCommentIds.contains(commentId));</span>
+<span class="fc" id="L789">            }</span>
+        }
+        
+<span class="fc" id="L792">        return commentsPage.map(comment -&gt; commentConverter.toResponse(comment, </span>
+<span class="fc" id="L793">            likeStatusMap.getOrDefault(comment.getId(), false), currentUserId));</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

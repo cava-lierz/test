@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CacheController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">CacheController.java</span></div><h1>CacheController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.ApiResponse;
+import com.mentara.util.CacheUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 缓存管理控制器
+ * 提供缓存查看和清理的API接口
+ */
+@RestController
+@RequestMapping(&quot;/cache&quot;)
+<span class="fc" id="L19">public class CacheController {</span>
+
+    @Autowired
+    private CacheManager cacheManager;
+
+    @Autowired
+    private CacheUtils cacheUtils;
+
+    /**
+     * 获取所有缓存信息
+     */
+    @GetMapping(&quot;/info&quot;)
+    public ApiResponse&lt;Map&lt;String, Object&gt;&gt; getCacheInfo() {
+<span class="fc" id="L32">        Map&lt;String, Object&gt; cacheInfo = new HashMap&lt;&gt;();</span>
+        
+<span class="fc bfc" id="L34" title="All 2 branches covered.">        for (String cacheName : cacheManager.getCacheNames()) {</span>
+<span class="fc" id="L35">            Cache cache = cacheManager.getCache(cacheName);</span>
+<span class="pc bpc" id="L36" title="1 of 2 branches missed.">            if (cache instanceof org.springframework.cache.concurrent.ConcurrentMapCache) {</span>
+<span class="fc" id="L37">                org.springframework.cache.concurrent.ConcurrentMapCache concurrentMapCache = </span>
+                    (org.springframework.cache.concurrent.ConcurrentMapCache) cache;
+<span class="fc" id="L39">                cacheInfo.put(cacheName, concurrentMapCache.getNativeCache().size());</span>
+            }
+<span class="fc" id="L41">        }</span>
+        
+<span class="fc" id="L43">        return ApiResponse.success(cacheInfo);</span>
+    }
+
+    /**
+     * 清除指定缓存
+     */
+    @DeleteMapping(&quot;/{cacheName}&quot;)
+    public ApiResponse&lt;String&gt; evictCache(@PathVariable String cacheName) {
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (!cacheUtils.cacheExists(cacheName)) {</span>
+<span class="fc" id="L52">            return ApiResponse.error(&quot;400&quot;, &quot;缓存不存在: &quot; + cacheName);</span>
+        }
+        
+<span class="nc" id="L55">        cacheUtils.evictCache(cacheName);</span>
+<span class="nc" id="L56">        return ApiResponse.success(&quot;缓存已清除: &quot; + cacheName);</span>
+    }
+
+    /**
+     * 清除所有缓存
+     */
+    @DeleteMapping(&quot;/all&quot;)
+    public ApiResponse&lt;String&gt; evictAllCaches() {
+<span class="fc" id="L64">        cacheUtils.evictAllCaches();</span>
+<span class="fc" id="L65">        return ApiResponse.success(&quot;所有缓存已清除&quot;);</span>
+    }
+
+    /**
+     * 获取缓存名称列表
+     */
+    @GetMapping(&quot;/names&quot;)
+    public ApiResponse&lt;Map&lt;String, Object&gt;&gt; getCacheNames() {
+<span class="fc" id="L73">        Map&lt;String, Object&gt; result = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L74">        result.put(&quot;cacheNames&quot;, cacheUtils.getCacheNames());</span>
+<span class="fc" id="L75">        result.put(&quot;count&quot;, cacheUtils.getCacheNames().size());</span>
+<span class="fc" id="L76">        return ApiResponse.success(result);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">NotificationServiceImpl.java</span></div><h1>NotificationServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.entity.Notification;
+import com.mentara.entity.User;
+import com.mentara.entity.Post;
+import com.mentara.entity.Comment;
+import com.mentara.repository.NotificationRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.NotificationService;
+import com.mentara.service.notification.NotificationContext;
+import com.mentara.service.notification.NotificationStrategy;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.converter.NotificationResponseFactory;
+import com.mentara.dto.request.SystemNotificationRequest;
+import com.mentara.dto.response.BaseNotificationResponse;
+import com.mentara.service.NotificationWebSocketService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Async;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * 通知服务实现类
+ * 重构后使用策略模式，支持异步发送
+ */
+@Service
+<span class="fc" id="L35">@Slf4j</span>
+public class NotificationServiceImpl implements NotificationService {
+    
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private NotificationResponseFactory responseFactory;
+
+    @Autowired
+    private NotificationWebSocketService webSocketService;
+    
+    private final Map&lt;String, NotificationStrategy&gt; strategyMap;
+    
+    /**
+     * 构造函数，初始化策略映射
+     */
+<span class="fc" id="L55">    public NotificationServiceImpl(List&lt;NotificationStrategy&gt; strategies) {</span>
+<span class="fc" id="L56">        this.strategyMap = strategies.stream()</span>
+<span class="fc" id="L57">            .collect(Collectors.toMap(NotificationStrategy::getType, Function.identity()));</span>
+<span class="fc" id="L58">    }</span>
+
+    @Override
+    public Page&lt;BaseNotificationResponse&gt; getUnreadNotificationsForUser(Long userId, Pageable pageable) {
+<span class="fc" id="L62">        User receiver = userRepository.findById(userId)</span>
+<span class="pc" id="L63">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+<span class="fc" id="L64">        Page&lt;Notification&gt; notifications = notificationRepository.findByReceiverAndReadFalseOrderByCreatedAtDesc(receiver, pageable);</span>
+<span class="fc" id="L65">        return notifications.map(responseFactory::createResponse);</span>
+    }
+
+    @Override
+    @Transactional
+    @Async(&quot;notificationExecutor&quot;)
+    public void createAndSendSystemNotification(SystemNotificationRequest request) {
+        try {
+<span class="fc" id="L73">            log.info(&quot;开始异步处理系统通知: title={}&quot;, request.getTitle());</span>
+            
+<span class="fc" id="L75">        NotificationContext context = NotificationContext.builder()</span>
+<span class="fc" id="L76">            .title(request.getTitle())</span>
+<span class="fc" id="L77">            .content(request.getContent())</span>
+<span class="fc" id="L78">            .actionUrl(request.getActionUrl())</span>
+<span class="fc" id="L79">            .build();</span>
+<span class="fc" id="L80">        NotificationStrategy strategy = strategyMap.get(&quot;SYSTEM&quot;);</span>
+<span class="pc bpc" id="L81" title="2 of 4 branches missed.">        if (strategy == null || !strategy.shouldSend(context)) return;</span>
+<span class="fc" id="L82">        Notification notification = strategy.createOrUpdate(context);</span>
+<span class="fc" id="L83">        notificationRepository.save(notification);</span>
+<span class="fc" id="L84">        BaseNotificationResponse response = responseFactory.createResponse(notification);</span>
+        // 系统通知广播给所有用户
+<span class="fc" id="L86">        webSocketService.sendSystemNotificationAsync(response);</span>
+            
+<span class="fc" id="L88">            log.info(&quot;系统通知处理完成: title={}&quot;, request.getTitle());</span>
+<span class="fc" id="L89">        } catch (Exception e) {</span>
+<span class="fc" id="L90">            log.error(&quot;异步处理系统通知失败: title={}, error={}&quot;, </span>
+<span class="fc" id="L91">                request.getTitle(), e.getMessage(), e);</span>
+<span class="fc" id="L92">        }</span>
+<span class="fc" id="L93">    }</span>
+
+    @Override
+    @Transactional
+    @Async(&quot;notificationExecutor&quot;)
+    public void createAndSendPostLikeNotification(Post post, User liker) {
+        try {
+<span class="fc" id="L100">            log.info(&quot;开始异步处理帖子点赞通知: postId={}, likerId={}&quot;, post.getId(), liker.getId());</span>
+            
+<span class="fc" id="L102">        NotificationContext context = NotificationContext.builder()</span>
+<span class="fc" id="L103">            .sender(liker)</span>
+<span class="fc" id="L104">            .receiver(post.getAuthor())</span>
+<span class="fc" id="L105">            .post(post)</span>
+<span class="fc" id="L106">            .build();</span>
+<span class="fc" id="L107">        NotificationStrategy strategy = strategyMap.get(&quot;POST_LIKE&quot;);</span>
+<span class="pc bpc" id="L108" title="2 of 4 branches missed.">        if (strategy == null || !strategy.shouldSend(context)) return;</span>
+<span class="nc" id="L109">        Notification notification = strategy.createOrUpdate(context);</span>
+<span class="nc" id="L110">        notificationRepository.save(notification);</span>
+<span class="nc" id="L111">        BaseNotificationResponse response = responseFactory.createResponse(notification);</span>
+<span class="nc" id="L112">        webSocketService.sendNotificationAsync(notification.getReceiver().getId(), response);</span>
+            
+<span class="nc" id="L114">            log.info(&quot;帖子点赞通知处理完成: postId={}, likerId={}&quot;, post.getId(), liker.getId());</span>
+<span class="nc" id="L115">        } catch (Exception e) {</span>
+<span class="nc" id="L116">            log.error(&quot;异步处理帖子点赞通知失败: postId={}, likerId={}, error={}&quot;, </span>
+<span class="nc" id="L117">                post.getId(), liker.getId(), e.getMessage(), e);</span>
+<span class="nc" id="L118">        }</span>
+<span class="nc" id="L119">    }</span>
+
+    @Override
+    @Transactional
+    @Async(&quot;notificationExecutor&quot;)
+    public void createAndSendPostReplyNotification(Post post, Comment reply, User replyUser) {
+        try {
+<span class="fc" id="L126">            log.info(&quot;开始异步处理帖子回复通知: postId={}, replyId={}&quot;, post.getId(), reply.getId());</span>
+            
+<span class="fc" id="L128">        NotificationContext context = NotificationContext.builder()</span>
+<span class="fc" id="L129">            .sender(replyUser)</span>
+<span class="fc" id="L130">            .receiver(post.getAuthor())</span>
+<span class="fc" id="L131">            .post(post)</span>
+<span class="fc" id="L132">            .reply(reply)</span>
+<span class="fc" id="L133">            .build();</span>
+<span class="fc" id="L134">        NotificationStrategy strategy = strategyMap.get(&quot;POST_REPLY&quot;);</span>
+<span class="pc bpc" id="L135" title="2 of 4 branches missed.">        if (strategy == null || !strategy.shouldSend(context)) return;</span>
+<span class="nc" id="L136">        Notification notification = strategy.createOrUpdate(context);</span>
+<span class="nc" id="L137">        notificationRepository.save(notification);</span>
+<span class="nc" id="L138">        BaseNotificationResponse response = responseFactory.createResponse(notification);</span>
+<span class="nc" id="L139">        webSocketService.sendNotificationAsync(notification.getReceiver().getId(), response);</span>
+            
+<span class="nc" id="L141">            log.info(&quot;帖子回复通知处理完成: postId={}, replyId={}&quot;, post.getId(), reply.getId());</span>
+<span class="nc" id="L142">        } catch (Exception e) {</span>
+<span class="nc" id="L143">            log.error(&quot;异步处理帖子回复通知失败: postId={}, replyId={}, error={}&quot;, </span>
+<span class="nc" id="L144">                post.getId(), reply.getId(), e.getMessage(), e);</span>
+<span class="nc" id="L145">        }</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    @Transactional
+    @Async(&quot;notificationExecutor&quot;)
+    public void createAndSendCommentLikeNotification(Comment comment, User liker) {
+        try {
+<span class="fc" id="L153">            log.info(&quot;开始异步处理评论点赞通知: commentId={}, likerId={}&quot;, comment.getId(), liker.getId());</span>
+            
+<span class="fc" id="L155">        NotificationContext context = NotificationContext.builder()</span>
+<span class="fc" id="L156">            .sender(liker)</span>
+<span class="fc" id="L157">            .receiver(comment.getAuthor())</span>
+<span class="fc" id="L158">            .comment(comment)</span>
+<span class="fc" id="L159">            .build();</span>
+<span class="fc" id="L160">        NotificationStrategy strategy = strategyMap.get(&quot;COMMENT_LIKE&quot;);</span>
+<span class="pc bpc" id="L161" title="2 of 4 branches missed.">        if (strategy == null || !strategy.shouldSend(context)) return;</span>
+<span class="nc" id="L162">        Notification notification = strategy.createOrUpdate(context);</span>
+<span class="nc" id="L163">        notificationRepository.save(notification);</span>
+<span class="nc" id="L164">        BaseNotificationResponse response = responseFactory.createResponse(notification);</span>
+<span class="nc" id="L165">        webSocketService.sendNotificationAsync(notification.getReceiver().getId(), response);</span>
+            
+<span class="nc" id="L167">            log.info(&quot;评论点赞通知处理完成: commentId={}, likerId={}&quot;, comment.getId(), liker.getId());</span>
+<span class="nc" id="L168">        } catch (Exception e) {</span>
+<span class="nc" id="L169">            log.error(&quot;异步处理评论点赞通知失败: commentId={}, likerId={}, error={}&quot;, </span>
+<span class="nc" id="L170">                comment.getId(), liker.getId(), e.getMessage(), e);</span>
+<span class="nc" id="L171">        }</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    @Transactional
+    @Async(&quot;notificationExecutor&quot;)
+    public void createAndSendCommentReplyNotification(Comment comment, Comment reply, User replyUser) {
+        try {
+<span class="nc" id="L179">            log.info(&quot;开始异步处理评论回复通知: commentId={}, replyId={}&quot;, comment.getId(), reply.getId());</span>
+            
+<span class="nc" id="L181">        NotificationContext context = NotificationContext.builder()</span>
+<span class="nc" id="L182">            .sender(replyUser)</span>
+<span class="nc" id="L183">            .receiver(comment.getAuthor())</span>
+<span class="nc" id="L184">            .comment(comment)</span>
+<span class="nc" id="L185">            .reply(reply)</span>
+<span class="nc" id="L186">            .build();</span>
+<span class="nc" id="L187">        NotificationStrategy strategy = strategyMap.get(&quot;COMMENT_REPLY&quot;);</span>
+<span class="nc bnc" id="L188" title="All 4 branches missed.">        if (strategy == null || !strategy.shouldSend(context)) return;</span>
+<span class="nc" id="L189">        Notification notification = strategy.createOrUpdate(context);</span>
+<span class="nc" id="L190">        notificationRepository.save(notification);</span>
+<span class="nc" id="L191">        BaseNotificationResponse response = responseFactory.createResponse(notification);</span>
+<span class="nc" id="L192">        webSocketService.sendNotificationAsync(notification.getReceiver().getId(), response);</span>
+            
+<span class="nc" id="L194">            log.info(&quot;评论回复通知处理完成: commentId={}, replyId={}&quot;, comment.getId(), reply.getId());</span>
+<span class="nc" id="L195">        } catch (Exception e) {</span>
+<span class="nc" id="L196">            log.error(&quot;异步处理评论回复通知失败: commentId={}, replyId={}, error={}&quot;, </span>
+<span class="nc" id="L197">                comment.getId(), reply.getId(), e.getMessage(), e);</span>
+<span class="nc" id="L198">        }</span>
+<span class="nc" id="L199">    }</span>
+
+    @Override
+    @Transactional
+    public void markAsRead(Long notificationId, Long userId) {
+<span class="fc" id="L204">        Notification notification = notificationRepository.findById(notificationId)</span>
+<span class="pc" id="L205">            .orElseThrow(() -&gt; new com.mentara.exception.ResourceNotFoundException(&quot;Notification&quot;, &quot;id&quot;, notificationId));</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if (!notification.getReceiver().getId().equals(userId)) {</span>
+<span class="nc" id="L207">            throw new com.mentara.exception.ResourceNotFoundException(&quot;Notification&quot;, &quot;id&quot;, notificationId); // 或自定义权限异常</span>
+        }
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">        if (!notification.isRead()) {</span>
+<span class="fc" id="L210">            notification.setRead(true);</span>
+<span class="fc" id="L211">            notificationRepository.save(notification);</span>
+        }
+<span class="fc" id="L213">    }</span>
+
+    @Override
+    @Transactional
+    public void markAllAsRead(Long userId) {
+<span class="fc" id="L218">        User receiver = userRepository.findById(userId)</span>
+<span class="pc" id="L219">            .orElseThrow(() -&gt; new com.mentara.exception.ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+<span class="fc" id="L220">        List&lt;Notification&gt; unreadNotifications = notificationRepository.findByReceiverAndReadFalse(receiver);</span>
+<span class="fc bfc" id="L221" title="All 2 branches covered.">        for (Notification notification : unreadNotifications) {</span>
+<span class="fc" id="L222">            notification.setRead(true);</span>
+<span class="fc" id="L223">        }</span>
+<span class="fc" id="L224">        notificationRepository.saveAll(unreadNotifications);</span>
+<span class="fc" id="L225">    }</span>
+    
+    @Override
+    @Transactional
+    public void deleteNotification(Long notificationId, Long userId) {
+<span class="fc" id="L230">        Notification notification = notificationRepository.findById(notificationId)</span>
+<span class="pc" id="L231">            .orElseThrow(() -&gt; new com.mentara.exception.ResourceNotFoundException(&quot;Notification&quot;, &quot;id&quot;, notificationId));</span>
+        
+        // 检查权限：只有通知的接收者才能删除
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">        if (!notification.getReceiver().getId().equals(userId)) {</span>
+<span class="nc" id="L235">            throw new com.mentara.exception.UnauthorizedException(&quot;只能删除自己的通知&quot;);</span>
+        }
+        
+<span class="fc" id="L238">        notificationRepository.delete(notification);</span>
+<span class="fc" id="L239">    }</span>
+    
+    @Override
+    @Transactional
+    public void deleteAllNotifications(Long userId) {
+<span class="fc" id="L244">        User receiver = userRepository.findById(userId)</span>
+<span class="pc" id="L245">            .orElseThrow(() -&gt; new com.mentara.exception.ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+        
+<span class="fc" id="L247">        List&lt;Notification&gt; notifications = notificationRepository.findByReceiver(receiver);</span>
+<span class="fc" id="L248">        notificationRepository.deleteAll(notifications);</span>
+<span class="fc" id="L249">    }</span>
+
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

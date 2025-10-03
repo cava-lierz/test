@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppointmentService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service</a> &gt; <span class="el_source">AppointmentService.java</span></div><h1>AppointmentService.java</h1><pre class="source lang-java linenums">package com.mentara.service;
+
+import com.mentara.dto.AppointmentDTO;
+import com.mentara.dto.AppointmentRequestDTO;
+import com.mentara.entity.Expert;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.entity.Appointment;
+import com.mentara.entity.User;
+import com.mentara.entity.UserRole;
+import com.mentara.repository.AppointmentRepository;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.ExpertScheduleService;
+import com.mentara.service.ExpertService;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+/**
+ * 预约服务
+ */
+@Service
+<span class="fc" id="L33">@RequiredArgsConstructor</span>
+public class AppointmentService {
+
+<span class="fc" id="L36">    private static final Logger log = LoggerFactory.getLogger(AppointmentService.class);</span>
+    private final AppointmentRepository appointmentRepository;
+    private final ExpertRepository expertRepository;
+    private final UserRepository userRepository;
+    private final ExpertScheduleService expertScheduleService;
+    private final ExpertService expertService;
+
+    /**
+     * 将小时转换为periodIndex
+     * 时段定义：08:00, 09:00, 10:00, 11:00, 14:00, 15:00, 16:00, 17:00
+     * 12:00-14:00为休息时间，不开放预约
+     * 对于异常时间（如01:00, 02:00等），映射到最近的有效时间段
+     */
+    private int hourToPeriodIndex(int hour) {
+<span class="pc bpc" id="L50" title="22 of 25 branches missed.">        switch (hour) {</span>
+<span class="fc" id="L51">            case 8: return 0;   // 08:00</span>
+<span class="nc" id="L52">            case 9: return 1;   // 09:00</span>
+<span class="fc" id="L53">            case 10: return 2;  // 10:00</span>
+<span class="fc" id="L54">            case 11: return 3;  // 11:00</span>
+<span class="nc" id="L55">            case 14: return 4;  // 14:00</span>
+<span class="nc" id="L56">            case 15: return 5;  // 15:00</span>
+<span class="nc" id="L57">            case 16: return 6;  // 16:00</span>
+<span class="nc" id="L58">            case 17: return 7;  // 17:00</span>
+<span class="nc" id="L59">            case 1: return 0;   // 01:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L60">            case 2: return 0;   // 02:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L61">            case 3: return 0;   // 03:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L62">            case 4: return 0;   // 04:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L63">            case 5: return 0;   // 05:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L64">            case 6: return 0;   // 06:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L65">            case 7: return 0;   // 07:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L66">            case 12: return 4;  // 12:00 -&gt; 映射到14:00</span>
+<span class="nc" id="L67">            case 13: return 4;  // 13:00 -&gt; 映射到14:00</span>
+<span class="nc" id="L68">            case 18: return 7;  // 18:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L69">            case 19: return 7;  // 19:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L70">            case 20: return 7;  // 20:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L71">            case 21: return 7;  // 21:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L72">            case 22: return 7;  // 22:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L73">            case 23: return 7;  // 23:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L74">            case 0: return 0;   // 00:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L75">            default: return -1; // 其他无效时间段</span>
+        }
+    }
+
+    /**
+     * 检查指定的专家在指定时间是否可预约
+     */
+    public boolean isExpertAvailable(Long expertId, LocalDateTime appointmentTime) {
+<span class="nc" id="L83">        int periodIndex = hourToPeriodIndex(appointmentTime.getHour());</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (periodIndex == -1) {</span>
+<span class="nc" id="L85">            return false; // 无效时间段</span>
+        }
+
+<span class="nc" id="L88">        int dayOffset = (int) java.time.Duration.between(</span>
+<span class="nc" id="L89">            LocalDateTime.now().toLocalDate().atStartOfDay(),</span>
+<span class="nc" id="L90">            appointmentTime.toLocalDate().atStartOfDay()</span>
+<span class="nc" id="L91">        ).toDays();</span>
+
+        // 获取专家的可用时段
+<span class="nc" id="L94">        boolean[][] availableSlots = expertScheduleService.getAvailableSlots(expertId);</span>
+        
+        // 检查范围是否有效
+<span class="nc bnc" id="L97" title="All 8 branches missed.">        if (dayOffset &lt; 0 || dayOffset &gt;= availableSlots.length || </span>
+            periodIndex &lt; 0 || periodIndex &gt;= availableSlots[dayOffset].length) {
+<span class="nc" id="L99">            return false;</span>
+        }
+        
+<span class="nc" id="L102">        return availableSlots[dayOffset][periodIndex];</span>
+    }
+
+    /**
+     * 检查当前用户是否为指定专家的所有者
+     */
+    public boolean isExpertOwner(Long expertId, Authentication authentication) {
+        try {
+<span class="nc" id="L110">            String username = authentication.getName();</span>
+<span class="nc" id="L111">            User user = userRepository.findByUsername(username)</span>
+<span class="nc" id="L112">                    .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+<span class="nc" id="L113">            return user.getId().equals(expertId);</span>
+<span class="nc" id="L114">        } catch (Exception e) {</span>
+<span class="nc" id="L115">            return false;</span>
+        }
+    }
+
+    /**
+     * 检查当前用户是否为指定预约的专家所有者
+     */
+    public boolean isAppointmentExpertOwner(Long appointmentId, Authentication authentication) {
+        try {
+<span class="fc" id="L124">            String username = authentication.getName();</span>
+<span class="fc" id="L125">            User user = userRepository.findByUsername(username)</span>
+<span class="pc" id="L126">                    .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+            
+<span class="fc" id="L128">            Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="fc" id="L129">                    .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+            
+<span class="fc" id="L131">            return appointment.getExpertUser().getId().equals(user.getId());</span>
+<span class="fc" id="L132">        } catch (Exception e) {</span>
+<span class="fc" id="L133">            return false;</span>
+        }
+    }
+
+    /**
+     * 创建预约
+     */
+    @Transactional
+    public AppointmentDTO createAppointment(Long userId, AppointmentRequestDTO requestDTO) {
+<span class="fc" id="L142">        log.info(&quot;[创建预约] 开始处理预约请求 - userId: {}, expertUserId: {}, appointmentTime: {}&quot;, </span>
+<span class="fc" id="L143">                userId, requestDTO.getExpertUserId(), requestDTO.getAppointmentTime());</span>
+        
+        // 添加详细的请求数据调试
+<span class="fc" id="L146">        log.info(&quot;[创建预约调试] ========== 请求数据详情 ==========&quot;);</span>
+<span class="fc" id="L147">        log.info(&quot;[创建预约调试] userId: {}&quot;, userId);</span>
+<span class="fc" id="L148">        log.info(&quot;[创建预约调试] requestDTO: {}&quot;, requestDTO);</span>
+<span class="fc" id="L149">        log.info(&quot;[创建预约调试] expertUserId: {}&quot;, requestDTO.getExpertUserId());</span>
+<span class="fc" id="L150">        log.info(&quot;[创建预约调试] appointmentTime: {}&quot;, requestDTO.getAppointmentTime());</span>
+<span class="fc" id="L151">        log.info(&quot;[创建预约调试] description: {}&quot;, requestDTO.getDescription());</span>
+<span class="fc" id="L152">        log.info(&quot;[创建预约调试] contactInfo: {}&quot;, requestDTO.getContactInfo());</span>
+<span class="fc" id="L153">        log.info(&quot;[创建预约调试] duration: {}&quot;, requestDTO.getDuration());</span>
+<span class="fc" id="L154">        log.info(&quot;[创建预约调试] =======================================&quot;);</span>
+        
+        // 验证必要字段
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">        if (requestDTO.getExpertUserId() == null) {</span>
+<span class="nc" id="L158">            throw new RuntimeException(&quot;expertUserId不能为空&quot;);</span>
+        }
+        
+        // 验证专家用户是否存在且角色为EXPERT
+<span class="fc" id="L162">        User expertUser = userRepository.findById(requestDTO.getExpertUserId())</span>
+<span class="pc" id="L163">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家用户不存在，expertUserId: &quot; + requestDTO.getExpertUserId()));</span>
+        
+<span class="fc" id="L165">        log.info(&quot;[创建预约] 找到专家用户 - expertUser: {}, role: {}, isExpert: {}&quot;, </span>
+<span class="fc" id="L166">                expertUser.getUsername(), expertUser.getRole(), expertUser.isExpert());</span>
+        
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">        if (!expertUser.isExpert()) {</span>
+<span class="nc" id="L169">            throw new RuntimeException(&quot;指定用户不是专家，当前角色: &quot; + expertUser.getRole());</span>
+        }
+
+        // 验证用户是否存在
+<span class="fc" id="L173">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L174">                .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+
+        // 检查预约时间是否冲突（重叠判断）
+<span class="fc" id="L177">        LocalDateTime startTime = requestDTO.getAppointmentTime();</span>
+<span class="fc" id="L178">        LocalDateTime endTime = startTime.plusMinutes(requestDTO.getDuration());</span>
+        
+<span class="fc" id="L180">        List&lt;Appointment&gt; appointments = appointmentRepository.findByExpertUserAndStatusIn(expertUser, List.of(&quot;pending&quot;, &quot;confirmed&quot;));</span>
+<span class="fc" id="L181">        boolean hasConflict = appointments.stream().anyMatch(a -&gt; {</span>
+<span class="fc" id="L182">            LocalDateTime aStart = a.getAppointmentTime();</span>
+<span class="fc" id="L183">            LocalDateTime aEnd = aStart.plusMinutes(a.getDuration());</span>
+<span class="pc bpc" id="L184" title="1 of 4 branches missed.">            return aStart.isBefore(endTime) &amp;&amp; aEnd.isAfter(startTime);</span>
+        });
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        if (hasConflict) {</span>
+<span class="fc" id="L187">            log.error(&quot;[预约冲突] expertUserId={}, startTime={}, endTime={}, 冲突预约数量={}, 详情={}&quot;,</span>
+<span class="fc" id="L188">                expertUser.getId(), startTime, endTime, appointments.size(),</span>
+<span class="fc" id="L189">                appointments.stream().map(a -&gt; &quot;id=&quot; + a.getId() + &quot;,status=&quot; + a.getStatus()).toList());</span>
+<span class="fc" id="L190">            throw new RuntimeException(&quot;该时间段已被预约，请选择其他时间&quot;);</span>
+        }
+
+        // 计算dayOffset和periodIndex
+<span class="fc" id="L194">        int dayOffset = (int) java.time.Duration.between(</span>
+<span class="fc" id="L195">            LocalDateTime.now().toLocalDate().atStartOfDay(),</span>
+<span class="fc" id="L196">            startTime.toLocalDate().atStartOfDay()</span>
+<span class="fc" id="L197">        ).toDays();</span>
+<span class="fc" id="L198">        int periodIndex = hourToPeriodIndex(startTime.getHour());</span>
+<span class="fc" id="L199">        log.info(&quot;[预约调试] 当前本地时间: {}，前端传入预约时间: {}，dayOffset: {}，periodIndex: {}&quot;, LocalDateTime.now(), startTime, dayOffset, periodIndex);</span>
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">        if (periodIndex == -1) {</span>
+<span class="nc" id="L201">            throw new RuntimeException(&quot;预约时间不在可预约范围内&quot;);</span>
+        }
+        
+        // 根据expertUser找到对应的Expert记录
+<span class="fc" id="L205">        Expert expert = expertRepository.findByUserId(expertUser.getId())</span>
+<span class="pc" id="L206">                .orElseThrow(() -&gt; new RuntimeException(&quot;找不到专家记录，expertUserId: &quot; + expertUser.getId()));</span>
+<span class="fc" id="L207">        log.info(&quot;[预约调试] 找到Expert记录 - expertId: {}, expertName: {}&quot;, expert.getId(), expert.getName());</span>
+        
+        // 联动专家排班 - 使用Expert的ID
+<span class="fc" id="L210">        boolean booked = expertScheduleService.bookSlot(expert.getId(), dayOffset, periodIndex);</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (!booked) {</span>
+<span class="fc" id="L212">            throw new RuntimeException(&quot;该时间段已被预约，请选择其他时间&quot;);</span>
+        }
+
+        // 创建预约
+<span class="fc" id="L216">        Appointment appointment = new Appointment();</span>
+<span class="fc" id="L217">        appointment.setUser(user);</span>
+<span class="fc" id="L218">        appointment.setExpertUser(expertUser);</span>
+<span class="fc" id="L219">        appointment.setExpert(expert); // 设置Expert关联</span>
+<span class="fc" id="L220">        appointment.setAppointmentTime(requestDTO.getAppointmentTime());</span>
+<span class="fc" id="L221">        appointment.setDescription(requestDTO.getDescription());</span>
+<span class="fc" id="L222">        appointment.setContactInfo(requestDTO.getContactInfo());</span>
+<span class="fc" id="L223">        appointment.setDuration(requestDTO.getDuration());</span>
+<span class="fc" id="L224">        appointment.setStatus(&quot;pending&quot;);</span>
+
+<span class="fc" id="L226">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L227">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 获取用户的预约列表
+     */
+    public Page&lt;AppointmentDTO&gt; getUserAppointments(User user, Pageable pageable) {
+<span class="fc" id="L234">        Page&lt;Appointment&gt; appointments = appointmentRepository.findByUserOrderByCreatedAtDesc(user, pageable);</span>
+<span class="fc" id="L235">        return appointments.map(this::convertToDTO);</span>
+    }
+
+    /**
+     * 获取专家的预约列表（通过Expert ID - 已废弃，建议使用getExpertAppointmentsByUserId）
+     */
+    @Deprecated
+    public Page&lt;AppointmentDTO&gt; getExpertAppointments(Long expertId, Pageable pageable) {
+<span class="fc" id="L243">        Expert expert = expertRepository.findById(expertId)</span>
+<span class="pc" id="L244">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在&quot;));</span>
+        
+        // 如果专家有关联的用户，使用新的方法
+<span class="pc bpc" id="L247" title="1 of 2 branches missed.">        if (expert.getUserId() != null) {</span>
+<span class="fc" id="L248">            return getExpertAppointmentsByUserId(expert.getUserId(), pageable);</span>
+        }
+        
+        // 兼容性处理：创建一个临时的User对象
+<span class="nc" id="L252">        throw new RuntimeException(&quot;此专家没有关联的用户账号，无法获取预约列表&quot;);</span>
+    }
+
+    /**
+     * 通过用户ID获取专家的预约列表（用于专家用户获取自己的预约）
+     */
+    public Page&lt;AppointmentDTO&gt; getExpertAppointmentsByUserId(Long userId, Pageable pageable) {
+        // 验证用户是否为专家
+<span class="fc" id="L260">        User expertUser = userRepository.findById(userId)</span>
+<span class="pc" id="L261">                .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">        if (!expertUser.isExpert()) {</span>
+<span class="nc" id="L264">            throw new RuntimeException(&quot;用户不是专家&quot;);</span>
+        }
+        
+<span class="fc" id="L267">        Page&lt;Appointment&gt; appointments = appointmentRepository.findByExpertUserOrderByCreatedAtDesc(expertUser, pageable);</span>
+<span class="fc" id="L268">        return appointments.map(this::convertToDTO);</span>
+    }
+
+    /**
+     * 获取预约详情
+     */
+    public AppointmentDTO getAppointmentById(Long appointmentId) {
+<span class="fc" id="L275">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="fc" id="L276">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+<span class="fc" id="L277">        return convertToDTO(appointment);</span>
+    }
+
+    /**
+     * 确认预约
+     */
+    @Transactional
+    public AppointmentDTO confirmAppointment(Long appointmentId, String expertReply) {
+<span class="fc" id="L285">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="pc" id="L286">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+        
+<span class="fc" id="L288">        appointment.setStatus(&quot;confirmed&quot;);</span>
+<span class="fc" id="L289">        appointment.setExpertReply(expertReply);</span>
+        
+<span class="fc" id="L291">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L292">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 拒绝预约
+     */
+    @Transactional
+    public AppointmentDTO rejectAppointment(Long appointmentId, String expertReply) {
+<span class="fc" id="L300">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="pc" id="L301">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+        
+<span class="fc" id="L303">        appointment.setStatus(&quot;rejected&quot;);</span>
+<span class="fc" id="L304">        appointment.setExpertReply(expertReply);</span>
+        
+        // 释放预约时间段 - 先通过expertUserId找到expertId
+<span class="fc" id="L307">        Long expertUserId = appointment.getExpertUser().getId();</span>
+<span class="fc" id="L308">        Optional&lt;Expert&gt; expertOpt = expertRepository.findByUserId(expertUserId);</span>
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">        if (expertOpt.isPresent()) {</span>
+<span class="fc" id="L310">            Long expertId = expertOpt.get().getId();</span>
+<span class="fc" id="L311">            int dayOffset = (int) java.time.Duration.between(</span>
+<span class="fc" id="L312">                LocalDateTime.now().toLocalDate().atStartOfDay(),</span>
+<span class="fc" id="L313">                appointment.getAppointmentTime().toLocalDate().atStartOfDay()</span>
+<span class="fc" id="L314">            ).toDays();</span>
+<span class="fc" id="L315">            int periodIndex = hourToPeriodIndex(appointment.getAppointmentTime().getHour());</span>
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">            if (periodIndex != -1) {</span>
+<span class="fc" id="L317">                expertScheduleService.releaseSlot(expertId, dayOffset, periodIndex);</span>
+<span class="fc" id="L318">                log.info(&quot;释放预约时间段成功 - expertId: {}, dayOffset: {}, periodIndex: {}&quot;, </span>
+<span class="fc" id="L319">                        expertId, dayOffset, periodIndex);</span>
+            }
+<span class="fc" id="L321">        } else {</span>
+<span class="nc" id="L322">            log.warn(&quot;跳过释放排班时间段，找不到专家记录: expertUserId={}&quot;, expertUserId);</span>
+        }
+        
+<span class="fc" id="L325">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L326">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 取消预约
+     */
+    @Transactional
+    public AppointmentDTO cancelAppointment(Long appointmentId, Long userId) {
+<span class="fc" id="L334">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="fc" id="L335">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+        
+        // 只有预约用户或管理员可以取消预约
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">        if (!appointment.getUser().getId().equals(userId)) {</span>
+<span class="nc" id="L339">            throw new RuntimeException(&quot;无权限取消此预约&quot;);</span>
+        }
+        
+        // 释放预约时间段 - 先通过expertUserId找到expertId
+<span class="fc" id="L343">        Long expertUserId = appointment.getExpertUser().getId();</span>
+<span class="fc" id="L344">        Optional&lt;Expert&gt; expertOpt = expertRepository.findByUserId(expertUserId);</span>
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">        if (expertOpt.isPresent()) {</span>
+<span class="fc" id="L346">            Long expertId = expertOpt.get().getId();</span>
+<span class="fc" id="L347">            int dayOffset = (int) java.time.Duration.between(</span>
+<span class="fc" id="L348">                LocalDateTime.now().toLocalDate().atStartOfDay(),</span>
+<span class="fc" id="L349">                appointment.getAppointmentTime().toLocalDate().atStartOfDay()</span>
+<span class="fc" id="L350">            ).toDays();</span>
+<span class="fc" id="L351">            int periodIndex = hourToPeriodIndex(appointment.getAppointmentTime().getHour());</span>
+<span class="pc bpc" id="L352" title="1 of 2 branches missed.">            if (periodIndex != -1) {</span>
+<span class="fc" id="L353">                expertScheduleService.releaseSlot(expertId, dayOffset, periodIndex);</span>
+<span class="fc" id="L354">                log.info(&quot;释放预约时间段成功 - expertId: {}, dayOffset: {}, periodIndex: {}&quot;, </span>
+<span class="fc" id="L355">                        expertId, dayOffset, periodIndex);</span>
+            }
+<span class="fc" id="L357">        } else {</span>
+<span class="nc" id="L358">            log.warn(&quot;跳过释放排班时间段，找不到专家记录: expertUserId={}&quot;, expertUserId);</span>
+        }
+        
+<span class="fc" id="L361">        appointment.setStatus(&quot;cancelled&quot;);</span>
+<span class="fc" id="L362">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L363">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 完成预约
+     */
+    @Transactional
+    public AppointmentDTO completeAppointment(Long appointmentId) {
+<span class="fc" id="L371">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="pc" id="L372">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+        
+<span class="fc" id="L374">        appointment.setStatus(&quot;completed&quot;);</span>
+<span class="fc" id="L375">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L376">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 评价预约
+     */
+    @Transactional
+    public AppointmentDTO rateAppointment(Long appointmentId, Long userId, String userRating, Integer rating) {
+<span class="fc" id="L384">        Appointment appointment = appointmentRepository.findById(appointmentId)</span>
+<span class="fc" id="L385">                .orElseThrow(() -&gt; new RuntimeException(&quot;预约不存在&quot;));</span>
+        
+        // 只有预约用户可以评价
+<span class="pc bpc" id="L388" title="1 of 2 branches missed.">        if (!appointment.getUser().getId().equals(userId)) {</span>
+<span class="nc" id="L389">            throw new RuntimeException(&quot;无权限评价此预约&quot;);</span>
+        }
+        
+<span class="fc" id="L392">        appointment.setUserRating(userRating);</span>
+<span class="fc" id="L393">        appointment.setRating(rating);</span>
+<span class="fc" id="L394">        Appointment savedAppointment = appointmentRepository.save(appointment);</span>
+<span class="fc" id="L395">        return convertToDTO(savedAppointment);</span>
+    }
+
+    /**
+     * 获取待处理的预约数量（通过Expert ID - 已废弃）
+     */
+    @Deprecated
+    public long getPendingAppointmentCount(Long expertId) {
+<span class="nc" id="L403">        Expert expert = expertRepository.findById(expertId)</span>
+<span class="nc" id="L404">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在&quot;));</span>
+        
+        // 如果专家有关联的用户，使用新的方法
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (expert.getUserId() != null) {</span>
+<span class="nc" id="L408">            return getPendingAppointmentCountByUserId(expert.getUserId());</span>
+        }
+        
+<span class="nc" id="L411">        throw new RuntimeException(&quot;此专家没有关联的用户账号，无法获取待处理预约数量&quot;);</span>
+    }
+
+    /**
+     * 通过用户ID获取专家的待处理预约数量
+     */
+    public long getPendingAppointmentCountByUserId(Long userId) {
+<span class="nc" id="L418">        User expertUser = userRepository.findById(userId)</span>
+<span class="nc" id="L419">                .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+<span class="nc bnc" id="L421" title="All 2 branches missed.">        if (!expertUser.isExpert()) {</span>
+<span class="nc" id="L422">            throw new RuntimeException(&quot;用户不是专家&quot;);</span>
+        }
+        
+<span class="nc" id="L425">        return appointmentRepository.countByExpertUserAndStatus(expertUser, &quot;pending&quot;);</span>
+    }
+
+    /**
+     * 转换为DTO
+     */
+    private AppointmentDTO convertToDTO(Appointment appointment) {
+<span class="fc" id="L432">        AppointmentDTO dto = new AppointmentDTO();</span>
+<span class="fc" id="L433">        dto.setId(appointment.getId());</span>
+<span class="fc" id="L434">        dto.setUserId(appointment.getUser().getId());</span>
+<span class="fc" id="L435">        dto.setExpertUserId(appointment.getExpertUser().getId());</span>
+        
+        // 获取专家信息 - 先尝试从Expert表获取，如果没有则使用User信息
+<span class="fc" id="L438">        String expertName = appointment.getExpertUser().getNickname();</span>
+<span class="pc bpc" id="L439" title="3 of 4 branches missed.">        if (expertName == null || expertName.trim().isEmpty()) {</span>
+<span class="fc" id="L440">            expertName = appointment.getExpertUser().getUsername();</span>
+        }
+        
+        // 尝试从Expert表获取更详细的专家信息
+<span class="fc" id="L444">        Optional&lt;Expert&gt; expertOpt = expertRepository.findByUserId(appointment.getExpertUser().getId());</span>
+<span class="pc bpc" id="L445" title="1 of 2 branches missed.">        if (expertOpt.isPresent()) {</span>
+<span class="fc" id="L446">            Expert expert = expertOpt.get();</span>
+<span class="fc" id="L447">            expertName = expert.getName();</span>
+        }
+        
+<span class="fc" id="L450">        dto.setExpertName(expertName);</span>
+<span class="pc bpc" id="L451" title="1 of 2 branches missed.">        dto.setUserName(appointment.getUser().getNickname() != null ? </span>
+<span class="pc" id="L452">                       appointment.getUser().getNickname() : appointment.getUser().getUsername());</span>
+<span class="fc" id="L453">        dto.setAppointmentTime(appointment.getAppointmentTime());</span>
+<span class="fc" id="L454">        dto.setStatus(appointment.getStatus());</span>
+<span class="fc" id="L455">        dto.setDescription(appointment.getDescription());</span>
+<span class="fc" id="L456">        dto.setContactInfo(appointment.getContactInfo());</span>
+<span class="fc" id="L457">        dto.setDuration(appointment.getDuration());</span>
+<span class="fc" id="L458">        dto.setCreatedAt(appointment.getCreatedAt());</span>
+<span class="fc" id="L459">        dto.setUpdatedAt(appointment.getUpdatedAt());</span>
+<span class="fc" id="L460">        dto.setExpertReply(appointment.getExpertReply());</span>
+<span class="fc" id="L461">        dto.setUserRating(appointment.getUserRating());</span>
+<span class="fc" id="L462">        dto.setRating(appointment.getRating());</span>
+<span class="fc" id="L463">        return dto;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

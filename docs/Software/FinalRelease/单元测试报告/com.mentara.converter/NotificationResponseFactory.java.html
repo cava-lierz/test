@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationResponseFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.converter</a> &gt; <span class="el_source">NotificationResponseFactory.java</span></div><h1>NotificationResponseFactory.java</h1><pre class="source lang-java linenums">package com.mentara.converter;
+
+import com.mentara.dto.response.*;
+import com.mentara.entity.*;
+import org.springframework.stereotype.Component;
+
+@Component
+<span class="fc" id="L8">public class NotificationResponseFactory {</span>
+    
+    public BaseNotificationResponse createResponse(Notification notification) {
+<span class="pc bpc" id="L11" title="1 of 2 branches missed.">        if (notification instanceof PostLikeNotification) {</span>
+<span class="nc" id="L12">            return createPostLikeNotificationResponse((PostLikeNotification) notification);</span>
+<span class="pc bpc" id="L13" title="1 of 2 branches missed.">        } else if (notification instanceof CommentLikeNotification) {</span>
+<span class="nc" id="L14">            return createCommentLikeNotificationResponse((CommentLikeNotification) notification);</span>
+<span class="pc bpc" id="L15" title="1 of 2 branches missed.">        } else if (notification instanceof PostReplyNotification) {</span>
+<span class="nc" id="L16">            return createPostReplyNotificationResponse((PostReplyNotification) notification);</span>
+<span class="pc bpc" id="L17" title="1 of 2 branches missed.">        } else if (notification instanceof CommentReplyNotification) {</span>
+<span class="nc" id="L18">            return createCommentReplyNotificationResponse((CommentReplyNotification) notification);</span>
+<span class="pc bpc" id="L19" title="1 of 2 branches missed.">        } else if (notification instanceof SystemNotification) {</span>
+<span class="fc" id="L20">            return createSystemNotificationResponse((SystemNotification) notification);</span>
+        } else {
+<span class="nc" id="L22">            return createGenericNotificationResponse(notification);</span>
+        }
+    }
+    
+    private PostLikeNotificationResponse createPostLikeNotificationResponse(
+        PostLikeNotification notification) {
+
+<span class="nc" id="L29">        PostLikeNotificationResponse response = new PostLikeNotificationResponse();</span>
+<span class="nc" id="L30">        response.setId(notification.getId());</span>
+<span class="nc" id="L31">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="nc" id="L32">        response.setRead(notification.isRead());</span>
+
+<span class="nc" id="L34">        response.setType(&quot;post_like&quot;);</span>
+<span class="nc" id="L35">        response.setLikerCount(notification.getLikerCount());</span>
+
+<span class="nc" id="L37">        User lastLiker = notification.getLastLiker();</span>
+<span class="nc" id="L38">        Post post = notification.getPost();</span>
+        
+<span class="nc" id="L40">        response.setLastLikerId(lastLiker.getId());</span>
+<span class="nc" id="L41">        response.setLastLikerNickname(lastLiker.getNickname());</span>
+<span class="nc" id="L42">        response.setPostId(post.getId());</span>
+<span class="nc" id="L43">        response.setPostTitle(post.getTitle());</span>
+        
+<span class="nc" id="L45">        return response;</span>
+    }
+    
+    private CommentLikeNotificationResponse createCommentLikeNotificationResponse(
+        CommentLikeNotification notification) {
+
+<span class="nc" id="L51">        CommentLikeNotificationResponse response = new CommentLikeNotificationResponse();</span>
+        
+<span class="nc" id="L53">        response.setId(notification.getId());</span>
+<span class="nc" id="L54">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="nc" id="L55">        response.setRead(notification.isRead());</span>
+
+<span class="nc" id="L57">        response.setType(&quot;comment_like&quot;);</span>
+<span class="nc" id="L58">        response.setLikerCount(notification.getLikerCount());</span>
+
+<span class="nc" id="L60">        User lastLiker = notification.getLastLiker();</span>
+<span class="nc" id="L61">        Comment comment = notification.getComment();</span>
+<span class="nc" id="L62">        Post post = comment.getPost();</span>
+        
+<span class="nc" id="L64">        response.setLastLikerId(lastLiker.getId());</span>
+<span class="nc" id="L65">        response.setLastLikerNickname(lastLiker.getNickname());</span>
+<span class="nc" id="L66">        response.setPostId(post.getId());</span>
+<span class="nc" id="L67">        response.setPostTitle(post.getTitle());</span>
+<span class="nc" id="L68">        response.setCommentId(comment.getId());</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        response.setCommentContent(comment.getContent().length() &gt; 30 </span>
+<span class="nc" id="L70">            ? comment.getContent().substring(0, 30) + &quot;...&quot; </span>
+<span class="nc" id="L71">            : comment.getContent());</span>
+        
+<span class="nc" id="L73">        return response;</span>
+    }
+    
+    private PostReplyNotificationResponse createPostReplyNotificationResponse(
+        PostReplyNotification notification) {
+<span class="nc" id="L78">        PostReplyNotificationResponse response = new PostReplyNotificationResponse();</span>
+
+<span class="nc" id="L80">        response.setId(notification.getId());</span>
+<span class="nc" id="L81">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="nc" id="L82">        response.setRead(notification.isRead());</span>
+
+<span class="nc" id="L84">        response.setType(&quot;post_reply&quot;);</span>
+
+<span class="nc" id="L86">        User replyUser = notification.getReplyUser();</span>
+<span class="nc" id="L87">        Post post = notification.getPost();</span>
+<span class="nc" id="L88">        Comment reply = notification.getReply();</span>
+
+<span class="nc" id="L90">        response.setReplyUserId(replyUser.getId());</span>
+<span class="nc" id="L91">        response.setReplyUserNickname(replyUser.getNickname());</span>
+<span class="nc" id="L92">        response.setPostId(post.getId());</span>
+<span class="nc" id="L93">        response.setPostTitle(post.getTitle());</span>
+<span class="nc" id="L94">        response.setReplyId(reply.getId());</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        response.setReplyContent(reply.getContent().length() &gt; 30 </span>
+<span class="nc" id="L96">            ? reply.getContent().substring(0, 30) + &quot;...&quot; </span>
+<span class="nc" id="L97">            : reply.getContent());</span>
+
+<span class="nc" id="L99">        return response;</span>
+    }
+    
+    private CommentReplyNotificationResponse createCommentReplyNotificationResponse(
+        CommentReplyNotification notification) {
+<span class="nc" id="L104">        CommentReplyNotificationResponse response = new CommentReplyNotificationResponse();</span>
+        
+<span class="nc" id="L106">        response.setId(notification.getId());</span>
+<span class="nc" id="L107">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="nc" id="L108">        response.setRead(notification.isRead());</span>
+<span class="nc" id="L109">        response.setType(&quot;comment_reply&quot;);</span>
+        
+<span class="nc" id="L111">        User replyUser = notification.getReplyUser();</span>
+<span class="nc" id="L112">        Comment comment = notification.getComment();</span>
+<span class="nc" id="L113">        Comment reply = notification.getReply();</span>
+<span class="nc" id="L114">        Post post = comment.getPost();</span>
+
+<span class="nc" id="L116">        response.setReplyUserId(replyUser.getId());</span>
+<span class="nc" id="L117">        response.setReplyUserNickname(replyUser.getNickname());</span>
+<span class="nc" id="L118">        response.setPostId(post.getId());</span>
+<span class="nc" id="L119">        response.setPostTitle(post.getTitle());</span>
+<span class="nc" id="L120">        response.setCommentId(comment.getId());</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        response.setCommentContent(comment.getContent().length() &gt; 30 </span>
+<span class="nc" id="L122">            ? comment.getContent().substring(0, 30) + &quot;...&quot; </span>
+<span class="nc" id="L123">            : comment.getContent());</span>
+<span class="nc" id="L124">        response.setReplyId(reply.getId());</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        response.setReplyContent(reply.getContent().length() &gt; 30 </span>
+<span class="nc" id="L126">            ? reply.getContent().substring(0, 30) + &quot;...&quot; </span>
+<span class="nc" id="L127">            : reply.getContent());</span>
+
+<span class="nc" id="L129">        return response;</span>
+    }
+
+    private SystemNotificationResponse createSystemNotificationResponse(
+        SystemNotification notification) {
+<span class="fc" id="L134">        SystemNotificationResponse response = new SystemNotificationResponse();</span>
+
+<span class="fc" id="L136">        response.setId(notification.getId());</span>
+<span class="fc" id="L137">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="fc" id="L138">        response.setRead(notification.isRead());</span>
+<span class="fc" id="L139">        response.setType(&quot;system&quot;);</span>
+        
+<span class="fc" id="L141">        response.setTitle(notification.getTitle());</span>
+<span class="fc" id="L142">        response.setContent(notification.getContent());</span>
+<span class="fc" id="L143">        response.setActionUrl(notification.getActionUrl());</span>
+
+<span class="fc" id="L145">        return response;</span>
+    }
+    
+    private BaseNotificationResponse createGenericNotificationResponse(Notification notification) {
+<span class="nc" id="L149">        BaseNotificationResponse response = new BaseNotificationResponse();</span>
+        
+        // 设置基础字段
+<span class="nc" id="L152">        response.setId(notification.getId());</span>
+<span class="nc" id="L153">        response.setCreatedAt(notification.getCreatedAt());</span>
+<span class="nc" id="L154">        response.setRead(notification.isRead());</span>
+<span class="nc" id="L155">        response.setType(&quot;other&quot;);</span>
+        
+<span class="nc" id="L157">        return response;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

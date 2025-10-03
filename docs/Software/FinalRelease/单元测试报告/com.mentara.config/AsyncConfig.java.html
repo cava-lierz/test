@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AsyncConfig.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.config</a> &gt; <span class="el_source">AsyncConfig.java</span></div><h1>AsyncConfig.java</h1><pre class="source lang-java linenums">package com.mentara.config;
+
+import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.aop.interceptor.SimpleAsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
+
+/**
+ * 异步配置
+ * 根据性能测试结果优化线程池配置
+ */
+@Configuration
+@EnableAsync
+<span class="fc" id="L19">public class AsyncConfig implements AsyncConfigurer {</span>
+    
+    @Override
+    public Executor getAsyncExecutor() {
+<span class="fc" id="L23">        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L24">        executor.setCorePoolSize(12);      // 核心线程数 - 从8提升到12</span>
+<span class="fc" id="L25">        executor.setMaxPoolSize(24);       // 最大线程数 - 从16提升到24</span>
+<span class="fc" id="L26">        executor.setQueueCapacity(200);    // 队列容量 - 从100提升到200</span>
+<span class="fc" id="L27">        executor.setThreadNamePrefix(&quot;Async-&quot;);</span>
+<span class="fc" id="L28">        executor.setKeepAliveSeconds(60);  // 线程空闲时间</span>
+<span class="fc" id="L29">        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());</span>
+<span class="fc" id="L30">        executor.initialize();</span>
+<span class="fc" id="L31">        return executor;</span>
+    }
+    
+    @Override
+    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+<span class="fc" id="L36">        return new SimpleAsyncUncaughtExceptionHandler();</span>
+    }
+    
+    /**
+     * AI审核专用线程池
+     * 特点：CPU密集型，需要较多线程
+     */
+    @Bean(&quot;aiAuditExecutor&quot;)
+    public Executor aiAuditExecutor() {
+<span class="fc" id="L45">        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L46">        executor.setCorePoolSize(6);        // 核心线程数 - 从4提升到6</span>
+<span class="fc" id="L47">        executor.setMaxPoolSize(12);        // 最大线程数 - 从8提升到12</span>
+<span class="fc" id="L48">        executor.setQueueCapacity(30);      // 队列容量 - 从20提升到30</span>
+<span class="fc" id="L49">        executor.setThreadNamePrefix(&quot;AIAudit-&quot;);</span>
+<span class="fc" id="L50">        executor.setKeepAliveSeconds(60);   // 线程空闲时间</span>
+<span class="fc" id="L51">        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());</span>
+<span class="fc" id="L52">        executor.initialize();</span>
+<span class="fc" id="L53">        return executor;</span>
+    }
+    
+    /**
+     * 向量存储专用线程池
+     * 特点：IO密集型，需要适中线程
+     */
+    @Bean(&quot;vectorExecutor&quot;)
+    public Executor vectorExecutor() {
+<span class="fc" id="L62">        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L63">        executor.setCorePoolSize(4);        // 核心线程数 - 从2提升到4</span>
+<span class="fc" id="L64">        executor.setMaxPoolSize(8);         // 最大线程数 - 从4提升到8</span>
+<span class="fc" id="L65">        executor.setQueueCapacity(20);      // 队列容量 - 从10提升到20</span>
+<span class="fc" id="L66">        executor.setThreadNamePrefix(&quot;Vector-&quot;);</span>
+<span class="fc" id="L67">        executor.setKeepAliveSeconds(60);   // 线程空闲时间</span>
+<span class="fc" id="L68">        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());</span>
+<span class="fc" id="L69">        executor.initialize();</span>
+<span class="fc" id="L70">        return executor;</span>
+    }
+    
+    /**
+     * 心情评分专用线程池
+     * 特点：CPU密集型，需要适中线程
+     */
+    @Bean(&quot;moodScoreExecutor&quot;)
+    public Executor moodScoreExecutor() {
+<span class="fc" id="L79">        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L80">        executor.setCorePoolSize(5);        // 核心线程数 - 从3提升到5</span>
+<span class="fc" id="L81">        executor.setMaxPoolSize(10);        // 最大线程数 - 从6提升到10</span>
+<span class="fc" id="L82">        executor.setQueueCapacity(25);      // 队列容量 - 从15提升到25</span>
+<span class="fc" id="L83">        executor.setThreadNamePrefix(&quot;MoodScore-&quot;);</span>
+<span class="fc" id="L84">        executor.setKeepAliveSeconds(60);   // 线程空闲时间</span>
+<span class="fc" id="L85">        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());</span>
+<span class="fc" id="L86">        executor.initialize();</span>
+<span class="fc" id="L87">        return executor;</span>
+    }
+    
+    /**
+     * 通知发送专用线程池
+     * 特点：IO密集型，需要较多线程
+     */
+    @Bean(&quot;notificationExecutor&quot;)
+    public Executor notificationExecutor() {
+<span class="fc" id="L96">        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L97">        executor.setCorePoolSize(6);        // 核心线程数 - 从4提升到6</span>
+<span class="fc" id="L98">        executor.setMaxPoolSize(15);        // 最大线程数 - 从10提升到15</span>
+<span class="fc" id="L99">        executor.setQueueCapacity(80);      // 队列容量 - 从50提升到80</span>
+<span class="fc" id="L100">        executor.setThreadNamePrefix(&quot;Notification-&quot;);</span>
+<span class="fc" id="L101">        executor.setKeepAliveSeconds(60);   // 线程空闲时间</span>
+<span class="fc" id="L102">        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());</span>
+<span class="fc" id="L103">        executor.initialize();</span>
+<span class="fc" id="L104">        return executor;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

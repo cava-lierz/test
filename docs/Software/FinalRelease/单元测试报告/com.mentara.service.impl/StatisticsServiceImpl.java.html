@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StatisticsServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">StatisticsServiceImpl.java</span></div><h1>StatisticsServiceImpl.java</h1><pre class="source lang-java linenums"> package com.mentara.service.impl;
+
+import com.mentara.dto.response.StatisticsResponse;
+import com.mentara.repository.UserRepository;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.ReportRepository;
+import com.mentara.service.StatisticsService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.temporal.WeekFields;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Locale;
+
+@Service
+<span class="fc" id="L19">public class StatisticsServiceImpl implements StatisticsService {</span>
+
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private PostRepository postRepository;
+    
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'weekly_' + #year + '_' + #weekNumber&quot;)
+    public StatisticsResponse getWeeklyStatistics(int year, int weekNumber) {
+        // 计算指定周的开始和结束时间
+<span class="fc" id="L34">        WeekFields weekFields = WeekFields.of(Locale.getDefault());</span>
+<span class="fc" id="L35">        LocalDate date = LocalDate.of(year, 1, 1)</span>
+<span class="fc" id="L36">            .with(weekFields.weekOfWeekBasedYear(), weekNumber)</span>
+<span class="fc" id="L37">            .with(weekFields.dayOfWeek(), 1);</span>
+        
+<span class="fc" id="L39">        LocalDateTime startDate = date.atStartOfDay();</span>
+<span class="fc" id="L40">        LocalDateTime endDate = date.plusDays(7).atStartOfDay().minusNanos(1);</span>
+
+<span class="fc" id="L42">        return getStatistics(startDate, endDate);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;statistics&quot;, key = &quot;'monthly_' + #year + '_' + #month&quot;)
+    public StatisticsResponse getMonthlyStatistics(int year, int month) {
+        // 计算指定月的开始和结束时间
+<span class="fc" id="L49">        LocalDateTime startDate = LocalDateTime.of(year, month, 1, 0, 0);</span>
+<span class="fc" id="L50">        LocalDateTime endDate = startDate.with(TemporalAdjusters.lastDayOfMonth())</span>
+<span class="fc" id="L51">            .withHour(23).withMinute(59).withSecond(59);</span>
+
+<span class="fc" id="L53">        return getStatistics(startDate, endDate);</span>
+    }
+
+    private StatisticsResponse getStatistics(LocalDateTime startDate, LocalDateTime endDate) {
+        // 统计新增用户数
+<span class="fc" id="L58">        int newUsers = userRepository.findAll().stream()</span>
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">            .filter(user -&gt; user.getCreatedAt() != null &amp;&amp;</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">                          user.getCreatedAt().isAfter(startDate) &amp;&amp;</span>
+<span class="pc bnc" id="L61" title="All 2 branches missed.">                          user.getCreatedAt().isBefore(endDate))</span>
+<span class="pc" id="L62">            .mapToInt(user -&gt; 1)</span>
+<span class="fc" id="L63">            .sum();</span>
+
+        // 统计新增帖子数
+<span class="fc" id="L66">        int totalPosts = postRepository.findAll().stream()</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">            .filter(post -&gt; post.getCreatedAt().isAfter(startDate) &amp;&amp;</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">                          post.getCreatedAt().isBefore(endDate))</span>
+<span class="pc" id="L69">            .mapToInt(post -&gt; 1)</span>
+<span class="fc" id="L70">            .sum();</span>
+
+        // 统计举报数
+<span class="fc" id="L73">        int reportCount = reportRepository.findAll().stream()</span>
+<span class="pc bnc" id="L74" title="All 2 branches missed.">            .filter(report -&gt; report.getCreatedAt().isAfter(startDate) &amp;&amp;</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">                            report.getCreatedAt().isBefore(endDate))</span>
+<span class="pc" id="L76">            .mapToInt(report -&gt; 1)</span>
+<span class="fc" id="L77">            .sum();</span>
+
+        // 统计活跃用户数（未被禁用的用户）
+<span class="fc" id="L80">        int activeUsers = (int) userRepository.findAll().stream()</span>
+<span class="pc bpc" id="L81" title="2 of 4 branches missed.">            .filter(user -&gt; user.getIsDisabled() == null || !user.getIsDisabled())</span>
+<span class="fc" id="L82">            .count();</span>
+
+<span class="fc" id="L84">        return StatisticsResponse.builder()</span>
+<span class="fc" id="L85">            .newUsers(newUsers)</span>
+<span class="fc" id="L86">            .totalPosts(totalPosts)</span>
+<span class="fc" id="L87">            .reportCount(reportCount)</span>
+<span class="fc" id="L88">            .activeUsers(activeUsers)</span>
+<span class="fc" id="L89">            .startDate(startDate)</span>
+<span class="fc" id="L90">            .endDate(endDate)</span>
+<span class="fc" id="L91">            .build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

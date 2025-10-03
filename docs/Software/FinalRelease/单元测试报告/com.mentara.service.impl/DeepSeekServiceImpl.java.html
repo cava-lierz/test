@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DeepSeekServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">DeepSeekServiceImpl.java</span></div><h1>DeepSeekServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mentara.config.DeepSeekConfig;
+import com.mentara.dto.request.DeepSeekRequest;
+import com.mentara.dto.response.DeepSeekResponse;
+import com.mentara.dto.response.LlmJsonResponse;
+import com.mentara.service.DeepSeekService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.util.Collections;
+
+/**
+ * DeepSeek API服务实现类
+ */
+<span class="fc" id="L24">@Slf4j</span>
+@Service
+<span class="fc" id="L26">@RequiredArgsConstructor</span>
+public class DeepSeekServiceImpl implements DeepSeekService {
+    
+    private final DeepSeekConfig deepSeekConfig;
+    private final ObjectMapper objectMapper;
+    private final WebClient webClient;
+    
+    @Override
+    public DeepSeekResponse sendChatRequest(DeepSeekRequest request) {
+        try {
+<span class="fc" id="L36">            log.info(&quot;发送请求到DeepSeek API，模型: {}, 消息数量: {}&quot;, </span>
+<span class="fc" id="L37">                    request.getModel(), request.getMessages().size());</span>
+            
+<span class="fc" id="L39">            return webClient.post()</span>
+<span class="fc" id="L40">                    .uri(deepSeekConfig.getBaseUrl() + &quot;/chat/completions&quot;)</span>
+<span class="fc" id="L41">                    .header(HttpHeaders.AUTHORIZATION, &quot;Bearer &quot; + deepSeekConfig.getApiKey())</span>
+<span class="fc" id="L42">                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)</span>
+<span class="fc" id="L43">                    .bodyValue(request)</span>
+<span class="fc" id="L44">                    .retrieve()</span>
+<span class="fc" id="L45">                    .bodyToMono(DeepSeekResponse.class)</span>
+<span class="fc" id="L46">                    .timeout(Duration.ofMillis(deepSeekConfig.getTimeout()))</span>
+<span class="fc" id="L47">                    .retry(deepSeekConfig.getMaxRetries())</span>
+<span class="fc" id="L48">                    .block();</span>
+                    
+<span class="nc" id="L50">        } catch (WebClientResponseException e) {</span>
+<span class="nc" id="L51">            log.error(&quot;DeepSeek API请求失败: {} - {}&quot;, e.getStatusCode(), e.getResponseBodyAsString());</span>
+<span class="nc" id="L52">            throw new RuntimeException(&quot;DeepSeek API请求失败: &quot; + e.getMessage(), e);</span>
+<span class="nc" id="L53">        } catch (Exception e) {</span>
+<span class="nc" id="L54">            log.error(&quot;调用DeepSeek API时发生异常&quot;, e);</span>
+<span class="nc" id="L55">            throw new RuntimeException(&quot;调用DeepSeek API时发生异常&quot;, e);</span>
+        }
+    }
+    
+    @Override
+    public String generateResponse(String message, String model) {
+        try {
+            // 构建请求
+<span class="fc" id="L63">            DeepSeekRequest request = DeepSeekRequest.builder()</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">                    .model(model != null ? model : deepSeekConfig.getDefaultModel())</span>
+<span class="fc" id="L65">                    .messages(Collections.singletonList(</span>
+<span class="fc" id="L66">                            DeepSeekRequest.Message.builder()</span>
+<span class="fc" id="L67">                                    .role(&quot;user&quot;)</span>
+<span class="fc" id="L68">                                    .content(message)</span>
+<span class="fc" id="L69">                                    .build()</span>
+                    ))
+<span class="fc" id="L71">                    .temperature(0.7)</span>
+<span class="fc" id="L72">                    .maxTokens(1000)</span>
+<span class="fc" id="L73">                    .stream(false)</span>
+<span class="fc" id="L74">                    .responseFormat(DeepSeekRequest.ResponseFormat.builder()</span>
+<span class="fc" id="L75">                            .type(&quot;json_object&quot;)</span>
+<span class="fc" id="L76">                            .build())</span>
+<span class="fc" id="L77">                    .build();</span>
+            
+            // 发送请求
+<span class="fc" id="L80">            DeepSeekResponse response = sendChatRequest(request);</span>
+            
+            // 提取响应内容
+<span class="pc bpc" id="L83" title="3 of 6 branches missed.">            if (response != null &amp;&amp; response.getChoices() != null &amp;&amp; !response.getChoices().isEmpty()) {</span>
+<span class="fc" id="L84">                String content = response.getChoices().get(0).getMessage().getContent();</span>
+<span class="fc" id="L85">                log.info(&quot;DeepSeek API响应成功，内容长度: {}&quot;, content.length());</span>
+<span class="fc" id="L86">                return content;</span>
+            } else {
+<span class="nc" id="L88">                log.warn(&quot;DeepSeek API响应为空或格式不正确&quot;);</span>
+<span class="nc" id="L89">                return &quot;{\&quot;content\&quot;: \&quot;抱歉，我暂时无法回应您的问题。\&quot;, \&quot;sensitive\&quot;: false}&quot;;</span>
+            }
+            
+<span class="nc" id="L92">        } catch (Exception e) {</span>
+<span class="nc" id="L93">            log.error(&quot;生成DeepSeek响应时发生异常&quot;, e);</span>
+<span class="nc" id="L94">            return &quot;{\&quot;content\&quot;: \&quot;抱歉，服务暂时不可用，请稍后再试。\&quot;, \&quot;sensitive\&quot;: false}&quot;;</span>
+        }
+    }
+    
+    /**
+     * 解析JSON格式的LLM响应
+     * @param jsonResponse JSON格式的响应字符串
+     * @return LlmJsonResponse对象
+     */
+    public LlmJsonResponse parseJsonResponse(String jsonResponse) {
+        try {
+<span class="fc" id="L105">            String cleanJson = jsonResponse</span>
+<span class="fc" id="L106">                    .replaceFirst(&quot;^\\s*```json\\s*&quot;, &quot;&quot;)  // 去除开头的```json</span>
+<span class="fc" id="L107">                    .replaceFirst(&quot;\\s*```\\s*$&quot;, &quot;&quot;);     // 去除结尾的```</span>
+<span class="fc" id="L108">            return objectMapper.readValue(cleanJson, LlmJsonResponse.class);</span>
+<span class="nc" id="L109">        } catch (Exception e) {</span>
+<span class="nc" id="L110">            log.error(&quot;解析JSON响应失败: {}&quot;, e.getMessage());</span>
+            // 如果解析失败，返回默认值
+<span class="nc" id="L112">            return LlmJsonResponse.builder()</span>
+<span class="nc" id="L113">                    .content(&quot;抱歉，响应格式解析失败。&quot;)</span>
+<span class="nc" id="L114">                    .sensitive(false)</span>
+<span class="nc" id="L115">                    .build();</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

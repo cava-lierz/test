@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatMessageServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">ChatMessageServiceImpl.java</span></div><h1>ChatMessageServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.request.ChatMessageRequest;
+import com.mentara.dto.response.ChatMessageResponse;
+import com.mentara.entity.ChatMessage;
+import com.mentara.entity.ChatRoom;
+import com.mentara.entity.ChatRoomUser;
+import com.mentara.repository.ChatMessageRepository;
+import com.mentara.repository.ChatRoomRepository;
+import com.mentara.repository.ChatRoomUserRepository;
+import com.mentara.service.ChatMessageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import java.util.Collections;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L28">public class ChatMessageServiceImpl implements ChatMessageService {</span>
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+    @Autowired
+    private ChatRoomRepository chatRoomRepository;
+    @Autowired
+    private ChatRoomUserRepository chatRoomUserRepository;
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+<span class="fc" id="L37">    private static final Logger logger = LoggerFactory.getLogger(ChatMessageServiceImpl.class);</span>
+
+    @Override
+    @Transactional
+    public ChatMessageResponse sendMessage(Long userId, ChatMessageRequest request) {
+<span class="fc" id="L42">        ChatRoom chatRoom = chatRoomRepository.findByIdAndIsDeletedFalse(request.getChatRoomId())</span>
+<span class="pc" id="L43">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found or has been deleted&quot;));</span>
+<span class="fc" id="L44">        List&lt;ChatRoomUser&gt; chatRoomUsers = chatRoomUserRepository.findByChatRoomIdAndUserId(chatRoom.getId(), userId);</span>
+<span class="pc bpc" id="L45" title="1 of 2 branches missed.">        if (chatRoomUsers.isEmpty()) throw new RuntimeException(&quot;User not in chat room&quot;);</span>
+<span class="fc" id="L46">        ChatRoomUser chatRoomUser = chatRoomUsers.get(0); // 使用第一个记录</span>
+<span class="fc" id="L47">        ChatMessage massage = new ChatMessage();</span>
+<span class="fc" id="L48">        massage.setChatRoom(chatRoom);</span>
+<span class="fc" id="L49">        massage.setChatRoomUser(chatRoomUser);</span>
+<span class="fc" id="L50">        massage.setContent(request.getContent());</span>
+<span class="fc" id="L51">        ChatMessage saved = chatMessageRepository.save(massage);</span>
+<span class="fc" id="L52">        ChatMessageResponse resp = toResponse(saved);</span>
+        // 消息推送到聊天室所有成员
+<span class="fc" id="L54">        java.util.List&lt;ChatRoomUser&gt; users = chatRoomUserRepository.findByChatRoomId(chatRoom.getId());</span>
+<span class="fc" id="L55">        logger.info(&quot;[WebSocket] 推送消息到聊天室 {}，消息ID: {}，成员数: {}&quot;, chatRoom.getId(), resp.getId(), users.size());</span>
+<span class="fc" id="L56">        logger.info(&quot;[WebSocket] 广播到/topic/chat/{}，内容: {}&quot;, chatRoom.getId(), resp);</span>
+<span class="fc" id="L57">        messagingTemplate.convertAndSend(&quot;/topic/chat/&quot; + chatRoom.getId().toString(), resp);</span>
+<span class="fc" id="L58">        logger.info(&quot;[WebSocket] 消息推送完成，消息ID: {}&quot;, resp.getId());</span>
+<span class="fc" id="L59">        return resp;</span>
+    }
+
+    @Override
+    public List&lt;ChatMessageResponse&gt; getMessagesByChatRoom(Long chatRoomId, Long userId) {
+        // 检查聊天室是否存在且未删除
+<span class="fc" id="L65">        ChatRoom chatRoom = chatRoomRepository.findByIdAndIsDeletedFalse(chatRoomId)</span>
+<span class="pc" id="L66">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found or has been deleted&quot;));</span>
+        
+<span class="fc" id="L68">        List&lt;ChatRoomUser&gt; users = chatRoomUserRepository.findByChatRoomIdAndUserId(chatRoomId, userId);</span>
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        if (users.isEmpty()) throw new RuntimeException(&quot;用户还未加入房间！&quot;);</span>
+<span class="fc" id="L70">        List&lt;ChatMessage&gt; massages = chatMessageRepository.findByChatRoomIdOrderBySentAtAsc(chatRoomId);</span>
+<span class="fc" id="L71">        return massages.stream().map(this::toResponse).collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public List&lt;ChatMessageResponse&gt; getMessagesByChatRoomAfterTimestamp(
+            Long chatRoomId,
+            Long userId,
+            LocalDateTime timestamp) {
+
+        // 检查聊天室是否存在且未删除
+<span class="nc" id="L81">        ChatRoom chatRoom = chatRoomRepository.findByIdAndIsDeletedFalse(chatRoomId)</span>
+<span class="nc" id="L82">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found or has been deleted&quot;));</span>
+
+        // 验证用户是否在聊天室
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (chatRoomUserRepository.findByChatRoomIdAndUserId(chatRoomId, userId).isEmpty()) {</span>
+<span class="nc" id="L86">            throw new RuntimeException(&quot;用户还未加入房间！&quot;);</span>
+        }
+
+        // 获取指定时间后的消息
+<span class="nc" id="L90">        List&lt;ChatMessage&gt; messages = chatMessageRepository.findByChatRoomIdAndSentAtAfterOrderBySentAtAsc(</span>
+                chatRoomId,
+                timestamp
+        );
+
+<span class="nc" id="L95">        return messages.stream()</span>
+<span class="nc" id="L96">                .map(this::toResponse)</span>
+<span class="nc" id="L97">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public List&lt;ChatMessageResponse&gt; getMessagesByChatRoomPaged(Long chatRoomId, Long userId, java.time.LocalDateTime before, int limit) {
+        // 一次性检查聊天室和用户权限
+<span class="fc" id="L103">        ChatRoom chatRoom = validateChatRoomAndUser(chatRoomId, userId);</span>
+        
+<span class="fc" id="L105">        Pageable pageable = PageRequest.of(0, limit);</span>
+        List&lt;ChatMessage&gt; messages;
+        
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (before != null) {</span>
+<span class="nc" id="L109">            messages = chatMessageRepository.findByChatRoomIdAndSentAtLessThanOrderBySentAtDesc(chatRoomId, before, pageable);</span>
+        } else {
+<span class="fc" id="L111">            messages = chatMessageRepository.findByChatRoomIdOrderBySentAtDesc(chatRoomId, pageable);</span>
+        }
+        
+        // 批量预加载关联对象，避免N+1查询
+<span class="fc" id="L115">        preloadChatRoomUsers(messages);</span>
+        
+<span class="fc" id="L117">        List&lt;ChatMessageResponse&gt; resp = messages.stream()</span>
+<span class="fc" id="L118">            .map(this::toResponseOptimized)</span>
+<span class="fc" id="L119">            .collect(java.util.stream.Collectors.toList());</span>
+        
+<span class="fc" id="L121">        Collections.reverse(resp);</span>
+<span class="fc" id="L122">        return resp;</span>
+    }
+
+    /**
+     * 验证聊天室和用户权限，避免重复查询
+     */
+    private ChatRoom validateChatRoomAndUser(Long chatRoomId, Long userId) {
+<span class="fc" id="L129">        ChatRoom chatRoom = chatRoomRepository.findByIdAndIsDeletedFalse(chatRoomId)</span>
+<span class="pc" id="L130">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found or has been deleted&quot;));</span>
+        
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (chatRoomUserRepository.findByChatRoomIdAndUserId(chatRoomId, userId).isEmpty()) {</span>
+<span class="nc" id="L133">            throw new RuntimeException(&quot;用户还未加入房间！&quot;);</span>
+        }
+        
+<span class="fc" id="L136">        return chatRoom;</span>
+    }
+
+    /**
+     * 批量预加载ChatRoomUser，避免N+1查询
+     */
+    private void preloadChatRoomUsers(List&lt;ChatMessage&gt; messages) {
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">        if (messages.isEmpty()) return;</span>
+        
+        // 收集所有需要的chatRoomUserId
+<span class="nc" id="L146">        List&lt;Long&gt; chatRoomUserIds = messages.stream()</span>
+<span class="nc" id="L147">            .map(msg -&gt; msg.getChatRoomUser().getId())</span>
+<span class="nc" id="L148">            .distinct()</span>
+<span class="nc" id="L149">            .collect(Collectors.toList());</span>
+        
+        // 批量查询ChatRoomUser
+<span class="nc" id="L152">        List&lt;ChatRoomUser&gt; chatRoomUsers = chatRoomUserRepository.findAllById(chatRoomUserIds);</span>
+<span class="nc" id="L153">        Map&lt;Long, ChatRoomUser&gt; chatRoomUserMap = chatRoomUsers.stream()</span>
+<span class="nc" id="L154">            .collect(Collectors.toMap(ChatRoomUser::getId, user -&gt; user));</span>
+        
+        // 预加载到消息对象中
+<span class="nc" id="L157">        messages.forEach(msg -&gt; {</span>
+<span class="nc" id="L158">            ChatRoomUser chatRoomUser = chatRoomUserMap.get(msg.getChatRoomUser().getId());</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">            if (chatRoomUser != null) {</span>
+<span class="nc" id="L160">                msg.setChatRoomUser(chatRoomUser);</span>
+            }
+<span class="nc" id="L162">        });</span>
+<span class="nc" id="L163">    }</span>
+
+    /**
+     * 优化的响应转换方法，避免懒加载
+     */
+    private ChatMessageResponse toResponseOptimized(ChatMessage message) {
+<span class="nc" id="L169">        ChatMessageResponse resp = new ChatMessageResponse();</span>
+<span class="nc" id="L170">        resp.setId(message.getId());</span>
+<span class="nc" id="L171">        resp.setChatRoomId(message.getChatRoom().getId());</span>
+<span class="nc" id="L172">        resp.setChatRoomUserId(message.getChatRoomUser().getId());</span>
+<span class="nc" id="L173">        resp.setVersion(message.getChatRoomUser().getVersion());</span>
+<span class="nc" id="L174">        resp.setContent(message.getContent());</span>
+<span class="nc" id="L175">        resp.setSentAt(message.getSentAt());</span>
+<span class="nc" id="L176">        return resp;</span>
+    }
+
+    private ChatMessageResponse toResponse(ChatMessage massage) {
+<span class="fc" id="L180">        ChatMessageResponse resp = new ChatMessageResponse();</span>
+<span class="fc" id="L181">        resp.setId(massage.getId());</span>
+<span class="fc" id="L182">        resp.setChatRoomId(massage.getChatRoom().getId());</span>
+<span class="fc" id="L183">        resp.setChatRoomUserId(massage.getChatRoomUser().getId());  // 设置用户ID</span>
+        
+        /*// 处理显示昵称
+        String displayNickname = massage.getChatRoomUser().getDisplayNickname();
+        if (displayNickname == null || displayNickname.isEmpty()) {
+            // 如果显示昵称为空，使用用户昵称
+            displayNickname = massage.getChatRoomUser().getUser().getNickname();
+        }
+        // 如果用户已删除，显示&quot;已删除用户&quot;
+        if (massage.getChatRoomUser().getUser().getIsDeleted() != null &amp;&amp; massage.getChatRoomUser().getUser().getIsDeleted()) {
+            displayNickname = &quot;已删除用户&quot;;
+        }
+        resp.setDisplayNickname(displayNickname);*/
+        
+        /*// 处理显示头像
+        String displayAvatar = massage.getChatRoomUser().getDisplayAvatar();
+        if (displayAvatar == null || displayAvatar.isEmpty()) {
+            // 如果显示头像为空，使用用户头像
+            displayAvatar = massage.getChatRoomUser().getUser().getAvatar();
+        }
+        // 如果用户已删除，使用默认头像
+        if (massage.getChatRoomUser().getUser().getIsDeleted() != null &amp;&amp; massage.getChatRoomUser().getUser().getIsDeleted()) {
+            displayAvatar = &quot;https://i.pravatar.cc/150?u=deleted&quot;;
+        }
+        resp.setDisplayAvatar(displayAvatar);*/
+
+<span class="fc" id="L209">        resp.setVersion(massage.getChatRoomUser().getVersion());</span>
+<span class="fc" id="L210">        resp.setContent(massage.getContent());</span>
+<span class="fc" id="L211">        resp.setSentAt(massage.getSentAt());</span>
+<span class="fc" id="L212">        return resp;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,563 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExpertScheduleServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">ExpertScheduleServiceImpl.java</span></div><h1>ExpertScheduleServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.entity.Appointment;
+import com.mentara.entity.Expert;
+import com.mentara.entity.ExpertSchedule;
+import com.mentara.entity.User;
+import com.mentara.repository.AppointmentRepository;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.repository.ExpertScheduleRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.ExpertScheduleService;
+import com.mentara.service.ExpertService;
+import com.mentara.service.UserService;
+import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Service
+<span class="fc" id="L31">public class ExpertScheduleServiceImpl implements ExpertScheduleService {</span>
+<span class="fc" id="L32">    private static final Logger log = LoggerFactory.getLogger(ExpertScheduleServiceImpl.class);</span>
+    @Autowired
+    private ExpertScheduleRepository expertScheduleRepository;
+    @Autowired
+    private ExpertRepository expertRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private ExpertService expertService;
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    /**
+     * 检查当前用户是否为指定专家的所有者
+     */
+    public boolean isExpertOwner(Long expertId, Authentication authentication) {
+        try {
+<span class="nc" id="L51">            String username = authentication.getName();</span>
+<span class="nc" id="L52">            Long userId = userService.findByUsername(username)</span>
+<span class="nc" id="L53">                    .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在: &quot; + username))</span>
+<span class="nc" id="L54">                    .getId();</span>
+<span class="nc" id="L55">            return userId.equals(expertId);</span>
+<span class="nc" id="L56">        } catch (Exception e) {</span>
+<span class="nc" id="L57">            return false;</span>
+        }
+    }
+
+    /**
+     * 获取专家的排班信息（适配前端格式）
+     * 注意：为了兼容现有前端，这里将状态转换为boolean
+     * 0=空闲 和 2=专家不可用 都转换为对应的boolean值
+     * 1=已预约 的时段在这个接口中视为不可用(false)
+     */
+    @Override
+    public Map&lt;String, Object&gt; getExpertSchedule(Long expertId) {
+<span class="fc" id="L69">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+        
+        // 构建前端期望的数据格式：[8时段][14天]
+<span class="fc" id="L72">        boolean[][] transposedSlots = new boolean[8][14];</span>
+<span class="fc" id="L73">        LocalDate today = LocalDate.now();</span>
+        
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        for (int day = 0; day &lt; 14; day++) {</span>
+<span class="fc" id="L76">            LocalDate currentDate = today.plusDays(day);</span>
+<span class="fc" id="L77">            int[] daySlots = schedule.getSlotsForDate(currentDate);</span>
+            
+<span class="fc bfc" id="L79" title="All 2 branches covered.">            for (int slot = 0; slot &lt; 8; slot++) {</span>
+                // 将状态转换为boolean：0(空闲)=true, 1(已预约)=false, 2(专家不可用)=false
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">                transposedSlots[slot][day] = (daySlots[slot] == 0);</span>
+            }
+        }
+        
+<span class="fc" id="L85">        Map&lt;String, Object&gt; result = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L86">        result.put(&quot;schedule&quot;, transposedSlots);</span>
+<span class="fc" id="L87">        result.put(&quot;timeSlots&quot;, new String[]{&quot;08:00&quot;, &quot;09:00&quot;, &quot;10:00&quot;, &quot;11:00&quot;, &quot;14:00&quot;, &quot;15:00&quot;, &quot;16:00&quot;, &quot;17:00&quot;});</span>
+<span class="fc" id="L88">        result.put(&quot;baseDate&quot;, today);  // 现在baseDate就是今天</span>
+        
+<span class="fc" id="L90">        return result;</span>
+    }
+
+    /**
+     * 通过用户ID获取专家的排班信息
+     */
+    @Override
+    public Map&lt;String, Object&gt; getExpertScheduleByUserId(Long userId) {
+<span class="fc" id="L98">        Expert expert = getOrCreateExpertByUserId(userId);</span>
+<span class="fc" id="L99">        return getExpertSchedule(expert.getId());</span>
+    }
+
+    /**
+     * 通过用户ID更新专家的排班信息
+     */
+    @Override
+    public boolean updateExpertAvailabilityByUserId(Long userId, int dayOffset, int periodIndex, boolean available) {
+<span class="fc" id="L107">        Expert expert = getOrCreateExpertByUserId(userId);</span>
+<span class="fc" id="L108">        return updateExpertAvailability(expert.getId(), dayOffset, periodIndex, available);</span>
+    }
+
+    /**
+     * 更新专家的排班偏好 (在状态0和2之间切换)
+     */
+    @Override
+    @Transactional
+    public boolean updateExpertAvailability(Long expertId, int dayOffset, int periodIndex, boolean available) {
+<span class="pc bpc" id="L117" title="4 of 8 branches missed.">        if (dayOffset &lt; 0 || dayOffset &gt;= 14 || periodIndex &lt; 0 || periodIndex &gt;= 8) {</span>
+<span class="nc" id="L118">            log.warn(&quot;更新排班参数非法：dayOffset={}, periodIndex={}&quot;, dayOffset, periodIndex);</span>
+<span class="nc" id="L119">            return false;</span>
+        }
+        
+<span class="fc" id="L122">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+<span class="fc" id="L123">        LocalDate targetDate = LocalDate.now().plusDays(dayOffset);</span>
+        
+        // 记录更新前的状态
+<span class="fc" id="L126">        int beforeStatus = schedule.getSlotStatus(targetDate, periodIndex);</span>
+<span class="fc" id="L127">        log.info(&quot;更新前排班状态：expertId={}, 日期={}, 时段={}, 更新前状态={}&quot;, </span>
+<span class="fc" id="L128">                expertId, targetDate, periodIndex, beforeStatus);</span>
+        
+        // 设置专家排班偏好（只在状态0和2之间切换，不影响已预约状态1）
+<span class="fc" id="L131">        schedule.setExpertAvailability(targetDate, periodIndex, available);</span>
+        
+        // 手动触发序列化（确保数据被正确序列化）
+<span class="fc" id="L134">        schedule.triggerSerialization();</span>
+        
+        // 保存到数据库
+<span class="fc" id="L137">        ExpertSchedule savedSchedule = expertScheduleRepository.save(schedule);</span>
+        
+        // 验证保存后的状态
+<span class="fc" id="L140">        int afterStatus = savedSchedule.getSlotStatus(targetDate, periodIndex);</span>
+<span class="fc" id="L141">        log.info(&quot;更新后排班状态：expertId={}, 日期={}, 时段={}, 更新后状态={}, JSON={}&quot;,</span>
+<span class="fc" id="L142">                expertId, targetDate, periodIndex, afterStatus, savedSchedule.getScheduleJson());</span>
+        
+<span class="fc" id="L144">        return true;</span>
+    }
+
+    /**
+     * 批量更新专家的排班偏好
+     */
+    @Override
+    @Transactional
+    public int batchUpdateExpertAvailabilityByUserId(Long userId, java.util.List&lt;com.mentara.controller.ExpertScheduleController.ScheduleUpdateRequest&gt; updates) {
+<span class="fc" id="L153">        Expert expert = getOrCreateExpertByUserId(userId);</span>
+<span class="fc" id="L154">        ExpertSchedule schedule = getOrCreateSchedule(expert.getId());</span>
+        
+<span class="fc" id="L156">        int successCount = 0;</span>
+        
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        for (com.mentara.controller.ExpertScheduleController.ScheduleUpdateRequest update : updates) {</span>
+<span class="pc bpc" id="L159" title="2 of 4 branches missed.">            if (update.getDayOffset() &lt; 0 || update.getDayOffset() &gt;= 14 || </span>
+<span class="pc bpc" id="L160" title="2 of 4 branches missed.">                update.getPeriodIndex() &lt; 0 || update.getPeriodIndex() &gt;= 8) {</span>
+<span class="nc" id="L161">                log.warn(&quot;批量更新排班参数非法：dayOffset={}, periodIndex={}&quot;, </span>
+<span class="nc" id="L162">                        update.getDayOffset(), update.getPeriodIndex());</span>
+<span class="nc" id="L163">                continue;</span>
+            }
+            
+<span class="fc" id="L166">            java.time.LocalDate targetDate = java.time.LocalDate.now().plusDays(update.getDayOffset());</span>
+            
+            // 记录更新前的状态
+<span class="fc" id="L169">            int beforeStatus = schedule.getSlotStatus(targetDate, update.getPeriodIndex());</span>
+<span class="fc" id="L170">            log.info(&quot;批量更新前排班状态：expertId={}, 日期={}, 时段={}, 更新前状态={}&quot;, </span>
+<span class="fc" id="L171">                    expert.getId(), targetDate, update.getPeriodIndex(), beforeStatus);</span>
+            
+            // 设置专家排班偏好（只在状态0和2之间切换，不影响已预约状态1）
+<span class="fc" id="L174">            schedule.setExpertAvailability(targetDate, update.getPeriodIndex(), update.isAvailable());</span>
+<span class="fc" id="L175">            successCount++;</span>
+<span class="fc" id="L176">        }</span>
+        
+        // 统一保存一次
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">        if (successCount &gt; 0) {</span>
+<span class="fc" id="L180">            schedule.triggerSerialization();</span>
+<span class="fc" id="L181">            expertScheduleRepository.save(schedule);</span>
+<span class="fc" id="L182">            log.info(&quot;批量更新排班完成：expertId={}, 成功更新{}个时间段&quot;, expert.getId(), successCount);</span>
+        }
+        
+<span class="fc" id="L185">        return successCount;</span>
+    }
+
+    /**
+     * 预约时段 (将状态从0改为1)
+     */
+    @Override
+    @Transactional
+    public boolean bookSlotDirectly(Long expertId, int dayOffset, int periodIndex) {
+<span class="pc bpc" id="L194" title="3 of 8 branches missed.">        if (dayOffset &lt; 0 || dayOffset &gt;= 14 || periodIndex &lt; 0 || periodIndex &gt;= 8) {</span>
+<span class="fc" id="L195">            log.warn(&quot;预约参数非法：dayOffset={}, periodIndex={}&quot;, dayOffset, periodIndex);</span>
+<span class="fc" id="L196">            return false;</span>
+        }
+        
+<span class="fc" id="L199">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+<span class="fc" id="L200">        LocalDate targetDate = LocalDate.now().plusDays(dayOffset);</span>
+        
+<span class="fc" id="L202">        boolean success = schedule.bookSlot(targetDate, periodIndex);</span>
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (success) {</span>
+<span class="fc" id="L204">            schedule.triggerSerialization();</span>
+<span class="fc" id="L205">            expertScheduleRepository.save(schedule);</span>
+<span class="fc" id="L206">            log.info(&quot;预约成功：expertId={}, 日期={}, 时段={}&quot;, expertId, targetDate, periodIndex);</span>
+        } else {
+<span class="nc" id="L208">            log.warn(&quot;预约失败，时段不可用：expertId={}, 日期={}, 时段={}, 当前状态={}&quot;, </span>
+<span class="nc" id="L209">                    expertId, targetDate, periodIndex, schedule.getSlotStatus(targetDate, periodIndex));</span>
+        }
+        
+<span class="fc" id="L212">        return success;</span>
+    }
+
+    /**
+     * 取消预约 (将状态从1改为0)
+     */
+    @Override
+    @Transactional
+    public boolean cancelSlotDirectly(Long expertId, int dayOffset, int periodIndex) {
+<span class="pc bpc" id="L221" title="7 of 8 branches missed.">        if (dayOffset &lt; 0 || dayOffset &gt;= 14 || periodIndex &lt; 0 || periodIndex &gt;= 8) {</span>
+<span class="fc" id="L222">            log.warn(&quot;取消预约参数非法：dayOffset={}, periodIndex={}&quot;, dayOffset, periodIndex);</span>
+<span class="fc" id="L223">            return false;</span>
+        }
+        
+<span class="nc" id="L226">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+<span class="nc" id="L227">        LocalDate targetDate = LocalDate.now().plusDays(dayOffset);</span>
+        
+<span class="nc" id="L229">        boolean success = schedule.cancelBooking(targetDate, periodIndex);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (success) {</span>
+<span class="nc" id="L231">            schedule.triggerSerialization();</span>
+<span class="nc" id="L232">            expertScheduleRepository.save(schedule);</span>
+<span class="nc" id="L233">            log.info(&quot;取消预约成功：expertId={}, 日期={}, 时段={}&quot;, expertId, targetDate, periodIndex);</span>
+        } else {
+<span class="nc" id="L235">            log.warn(&quot;取消预约失败，时段状态不正确：expertId={}, 日期={}, 时段={}, 当前状态={}&quot;, </span>
+<span class="nc" id="L236">                    expertId, targetDate, periodIndex, schedule.getSlotStatus(targetDate, periodIndex));</span>
+        }
+        
+<span class="nc" id="L239">        return success;</span>
+    }
+
+    @Override
+    @Transactional
+    public ExpertSchedule getOrCreateSchedule(Long expertId) {
+<span class="fc" id="L245">        Optional&lt;ExpertSchedule&gt; optional = expertScheduleRepository.findByExpertId(expertId);</span>
+<span class="fc bfc" id="L246" title="All 2 branches covered.">        if (optional.isPresent()) {</span>
+<span class="fc" id="L247">            ExpertSchedule schedule = optional.get();</span>
+            // 确保未来14天有数据，清理7天前的旧数据
+<span class="fc" id="L249">            schedule.ensureFutureDays(14);</span>
+<span class="fc" id="L250">            schedule.cleanupOldData(LocalDate.now().minusDays(7));</span>
+<span class="fc" id="L251">            expertScheduleRepository.save(schedule);</span>
+<span class="fc" id="L252">            return schedule;</span>
+        }
+        
+<span class="fc" id="L255">        Expert expert = expertRepository.findById(expertId)</span>
+<span class="pc" id="L256">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在: &quot; + expertId));</span>
+        
+<span class="fc" id="L258">        ExpertSchedule schedule = new ExpertSchedule();</span>
+<span class="fc" id="L259">        schedule.setExpert(expert);</span>
+        
+        // 初始化未来14天的排班（全部可用）
+<span class="fc" id="L262">        schedule.ensureFutureDays(14);</span>
+<span class="fc" id="L263">        return expertScheduleRepository.save(schedule);</span>
+    }
+
+    /**
+     * 不再需要刷新逻辑，因为我们使用绝对日期
+     */
+    @Override
+    @Transactional
+    public void refreshScheduleIfNeeded(Long expertId) {
+        // 新设计中不需要刷新，数据自动按日期管理
+<span class="nc" id="L273">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+        // 只需要确保数据完整性：清理旧数据，确保未来数据
+<span class="nc" id="L275">        schedule.cleanupOldData(LocalDate.now().minusDays(7));</span>
+<span class="nc" id="L276">        schedule.ensureFutureDays(14);</span>
+<span class="nc" id="L277">        expertScheduleRepository.save(schedule);</span>
+<span class="nc" id="L278">    }</span>
+
+    @Override
+    @Transactional
+    public boolean bookSlot(Long expertId, int dayOffset, int periodIndex) {
+        // 直接使用新的 bookSlotDirectly 方法
+<span class="fc" id="L284">        return bookSlotDirectly(expertId, dayOffset, periodIndex);</span>
+    }
+
+    @Override
+    @Transactional
+    public void releaseSlot(Long expertId, int dayOffset, int periodIndex) {
+        // 使用新的 cancelSlotDirectly 方法
+<span class="fc" id="L291">        cancelSlotDirectly(expertId, dayOffset, periodIndex);</span>
+<span class="fc" id="L292">    }</span>
+
+    @Override
+    public boolean[][] getAvailableSlots(Long expertId) {
+<span class="fc" id="L296">        ExpertSchedule schedule = getOrCreateSchedule(expertId);</span>
+<span class="fc" id="L297">        boolean[][] slots = new boolean[14][8];</span>
+<span class="fc" id="L298">        LocalDate today = LocalDate.now();</span>
+        
+<span class="fc bfc" id="L300" title="All 2 branches covered.">        for (int day = 0; day &lt; 14; day++) {</span>
+<span class="fc" id="L301">            LocalDate currentDate = today.plusDays(day);</span>
+<span class="fc" id="L302">            int[] daySlots = schedule.getSlotsForDate(currentDate);</span>
+<span class="fc bfc" id="L303" title="All 2 branches covered.">            for (int period = 0; period &lt; 8; period++) {</span>
+                // 只有状态为0（空闲）的时段才算可预约
+<span class="pc bpc" id="L305" title="1 of 2 branches missed.">                slots[day][period] = (daySlots[period] == 0);</span>
+            }
+        }
+        
+<span class="fc" id="L309">        return slots;</span>
+    }
+
+    @Override
+    public boolean[][] getAvailableSlotsByUserId(Long userId) {
+<span class="fc" id="L314">        Expert expert = getOrCreateExpertByUserId(userId);</span>
+<span class="fc" id="L315">        return getAvailableSlots(expert.getId());</span>
+    }
+
+    /**
+     * 获取或创建专家记录
+     */
+    private Expert getOrCreateExpertByUserId(Long userId) {
+<span class="fc" id="L322">        Optional&lt;Expert&gt; expertOpt = expertRepository.findByUserId(userId);</span>
+        
+<span class="fc bfc" id="L324" title="All 2 branches covered.">        if (expertOpt.isPresent()) {</span>
+<span class="fc" id="L325">            return expertOpt.get();</span>
+        }
+        
+        // 创建新的专家记录
+<span class="fc" id="L329">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L330">                .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+<span class="pc bpc" id="L332" title="1 of 2 branches missed.">        if (!user.isExpert()) {</span>
+<span class="fc" id="L333">            throw new RuntimeException(&quot;用户不是专家&quot;);</span>
+        }
+        
+<span class="nc" id="L336">        Expert expert = new Expert();</span>
+<span class="nc" id="L337">        expert.setUserId(userId);</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        expert.setName(user.getNickname() != null ? user.getNickname() : user.getUsername());</span>
+<span class="nc" id="L339">        expert.setSpecialty(&quot;心理咨询&quot;);</span>
+<span class="nc" id="L340">        expert.setStatus(&quot;online&quot;);</span>
+<span class="nc" id="L341">        return expertRepository.save(expert);</span>
+    }
+
+    /**
+     * 每天凌晨自动清理过期排班数据
+     */
+    @Scheduled(cron = &quot;0 0 0 * * ?&quot;)
+    public void cleanupOldSchedules() {
+<span class="nc" id="L349">        log.info(&quot;开始清理过期排班数据&quot;);</span>
+<span class="nc" id="L350">        LocalDate cutoffDate = LocalDate.now().minusDays(7);</span>
+        
+<span class="nc bnc" id="L352" title="All 2 branches missed.">        for (Expert expert : expertRepository.findAll()) {</span>
+            try {
+<span class="nc" id="L354">                ExpertSchedule schedule = getOrCreateSchedule(expert.getId());</span>
+<span class="nc" id="L355">                schedule.cleanupOldData(cutoffDate);</span>
+<span class="nc" id="L356">                schedule.ensureFutureDays(14);  // 确保未来14天有数据</span>
+<span class="nc" id="L357">                expertScheduleRepository.save(schedule);</span>
+<span class="nc" id="L358">            } catch (Exception e) {</span>
+<span class="nc" id="L359">                log.error(&quot;清理专家{}排班数据失败&quot;, expert.getId(), e);</span>
+<span class="nc" id="L360">            }</span>
+<span class="nc" id="L361">        }</span>
+        
+<span class="nc" id="L363">        log.info(&quot;清理过期排班数据完成&quot;);</span>
+<span class="nc" id="L364">    }</span>
+
+    /**
+     * 数据迁移：将旧的boolean格式数据迁移到新的int状态格式
+     * 运行一次后可以删除此方法
+     */
+    @Transactional
+    public void migrateScheduleDataFormat() {
+<span class="fc" id="L372">        log.info(&quot;开始数据迁移：boolean格式 -&gt; int状态格式&quot;);</span>
+        
+<span class="fc" id="L374">        List&lt;ExpertSchedule&gt; allSchedules = expertScheduleRepository.findAll();</span>
+<span class="fc" id="L375">        int migratedCount = 0;</span>
+        
+<span class="fc bfc" id="L377" title="All 2 branches covered.">        for (ExpertSchedule schedule : allSchedules) {</span>
+            try {
+<span class="fc" id="L379">                String originalJson = schedule.getScheduleJson();</span>
+                
+                // 检查是否已经是新格式（包含数字0,1,2而不是只有0,1）
+<span class="pc bpc" id="L382" title="3 of 6 branches missed.">                if (originalJson.contains(&quot;\&quot;2\&quot;&quot;) || originalJson.contains(&quot;,2,&quot;) || originalJson.contains(&quot;,2\&quot;&quot;)) {</span>
+<span class="nc" id="L383">                    log.debug(&quot;排班数据已经是新格式，跳过：{}&quot;, schedule.getId());</span>
+<span class="nc" id="L384">                    continue;</span>
+                }
+                
+                // 手动反序列化并转换
+<span class="fc" id="L388">                schedule.triggerDeserialization();</span>
+<span class="fc" id="L389">                Map&lt;LocalDate, int[]&gt; newDateToSlots = new HashMap&lt;&gt;();</span>
+                
+                // 这里假设旧数据在getDefaultSlots()中仍返回boolean[]
+                // 我们需要特殊处理来迁移数据
+<span class="fc" id="L393">                LocalDate today = LocalDate.now();</span>
+<span class="fc bfc" id="L394" title="All 2 branches covered.">                for (int day = -7; day &lt; 21; day++) { // 迁移过去7天到未来21天的数据</span>
+<span class="fc" id="L395">                    LocalDate date = today.plusDays(day);</span>
+                    try {
+<span class="fc" id="L397">                        int[] oldSlots = schedule.getSlotsForDate(date);</span>
+<span class="fc" id="L398">                        int[] newSlots = new int[8];</span>
+<span class="fc bfc" id="L399" title="All 2 branches covered.">                        for (int i = 0; i &lt; 8; i++) {</span>
+                            // 将boolean转换为int状态：true-&gt;0(空闲), false-&gt;2(专家不可用)
+<span class="pc bpc" id="L401" title="1 of 2 branches missed.">                            newSlots[i] = (oldSlots[i] == 1) ? 0 : 2;</span>
+                        }
+<span class="fc" id="L403">                        newDateToSlots.put(date, newSlots);</span>
+<span class="nc" id="L404">                    } catch (Exception e) {</span>
+<span class="nc" id="L405">                        log.debug(&quot;处理日期{}时出现问题，使用默认值&quot;, date);</span>
+<span class="nc" id="L406">                        int[] defaultSlots = new int[8];</span>
+<span class="nc" id="L407">                        Arrays.fill(defaultSlots, 0); // 默认全部空闲</span>
+<span class="nc" id="L408">                        newDateToSlots.put(date, defaultSlots);</span>
+<span class="fc" id="L409">                    }</span>
+                }
+                
+                // 更新内存中的映射
+<span class="fc" id="L413">                schedule.getClass().getDeclaredField(&quot;dateToSlots&quot;).setAccessible(true);</span>
+<span class="nc" id="L414">                schedule.getClass().getDeclaredField(&quot;dateToSlots&quot;).set(schedule, newDateToSlots);</span>
+                
+                // 触发序列化并保存
+<span class="nc" id="L417">                schedule.triggerSerialization();</span>
+<span class="nc" id="L418">                expertScheduleRepository.save(schedule);</span>
+                
+<span class="nc" id="L420">                migratedCount++;</span>
+<span class="nc" id="L421">                log.info(&quot;成功迁移排班数据：expertId={}, 新JSON={}&quot;, </span>
+<span class="nc" id="L422">                        schedule.getExpert().getId(), schedule.getScheduleJson());</span>
+                        
+<span class="fc" id="L424">            } catch (Exception e) {</span>
+<span class="fc" id="L425">                log.error(&quot;迁移排班数据失败：scheduleId={}&quot;, schedule.getId(), e);</span>
+<span class="nc" id="L426">            }</span>
+<span class="fc" id="L427">        }</span>
+        
+<span class="fc" id="L429">        log.info(&quot;数据迁移完成，共迁移{}条记录&quot;, migratedCount);</span>
+<span class="fc" id="L430">    }</span>
+
+    /**
+     * 将小时转换为periodIndex
+     * 时段定义：08:00, 09:00, 10:00, 11:00, 14:00, 15:00, 16:00, 17:00
+     * 对于异常时间（如01:00, 02:00等），映射到最近的有效时间段
+     */
+    private int hourToPeriodIndex(int hour) {
+<span class="nc bnc" id="L438" title="All 25 branches missed.">        switch (hour) {</span>
+<span class="nc" id="L439">            case 8: return 0;   // 08:00</span>
+<span class="nc" id="L440">            case 9: return 1;   // 09:00</span>
+<span class="nc" id="L441">            case 10: return 2;  // 10:00</span>
+<span class="nc" id="L442">            case 11: return 3;  // 11:00</span>
+<span class="nc" id="L443">            case 14: return 4;  // 14:00</span>
+<span class="nc" id="L444">            case 15: return 5;  // 15:00</span>
+<span class="nc" id="L445">            case 16: return 6;  // 16:00</span>
+<span class="nc" id="L446">            case 17: return 7;  // 17:00</span>
+<span class="nc" id="L447">            case 1: return 0;   // 01:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L448">            case 2: return 0;   // 02:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L449">            case 3: return 0;   // 03:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L450">            case 4: return 0;   // 04:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L451">            case 5: return 0;   // 05:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L452">            case 6: return 0;   // 06:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L453">            case 7: return 0;   // 07:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L454">            case 12: return 4;  // 12:00 -&gt; 映射到14:00</span>
+<span class="nc" id="L455">            case 13: return 4;  // 13:00 -&gt; 映射到14:00</span>
+<span class="nc" id="L456">            case 18: return 7;  // 18:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L457">            case 19: return 7;  // 19:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L458">            case 20: return 7;  // 20:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L459">            case 21: return 7;  // 21:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L460">            case 22: return 7;  // 22:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L461">            case 23: return 7;  // 23:00 -&gt; 映射到17:00</span>
+<span class="nc" id="L462">            case 0: return 0;   // 00:00 -&gt; 映射到08:00</span>
+<span class="nc" id="L463">            default: return -1; // 其他无效时间段</span>
+        }
+    }
+
+    @Override
+    public int[][] getDetailedSlots(Long expertId) {
+        try {
+<span class="fc" id="L470">            log.info(&quot;获取详细时间表状态 - expertId: {}&quot;, expertId);</span>
+            
+            // 直接从数据库重新获取最新的排班数据
+<span class="fc" id="L473">            ExpertSchedule schedule = expertScheduleRepository.findByExpertId(expertId)</span>
+<span class="fc" id="L474">                    .orElse(null);</span>
+            
+<span class="pc bpc" id="L476" title="1 of 2 branches missed.">            if (schedule == null) {</span>
+                // 如果没有排班记录，创建一个默认的
+<span class="nc" id="L478">                schedule = getOrCreateSchedule(expertId);</span>
+            } else {
+                // 手动触发反序列化，确保获取最新数据
+<span class="fc" id="L481">                schedule.triggerDeserialization();</span>
+<span class="fc" id="L482">                log.info(&quot;重新加载排班数据 - expertId: {}, JSON: {}&quot;, expertId, schedule.getScheduleJson());</span>
+            }
+            
+<span class="fc" id="L485">            int[][] slots = new int[14][8]; // 0=空闲(可预约), 1=用户预约(已被预约), 2=专家设置不可预约</span>
+<span class="fc" id="L486">            LocalDate today = LocalDate.now();</span>
+            
+            // 获取专家用户
+<span class="fc" id="L489">            Expert expert = expertRepository.findById(expertId)</span>
+<span class="pc" id="L490">                    .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在&quot;));</span>
+<span class="fc" id="L491">            log.info(&quot;找到专家记录 - expertId: {}, userId: {}&quot;, expertId, expert.getUserId());</span>
+            
+<span class="pc bpc" id="L493" title="1 of 2 branches missed.">            if (expert.getUserId() == null) {</span>
+<span class="nc" id="L494">                log.warn(&quot;专家没有关联用户ID，只返回基础排班状态&quot;);</span>
+                // 直接返回存储的状态
+<span class="nc bnc" id="L496" title="All 2 branches missed.">                for (int day = 0; day &lt; 14; day++) {</span>
+<span class="nc" id="L497">                    LocalDate currentDate = today.plusDays(day);</span>
+<span class="nc" id="L498">                    int[] daySlots = schedule.getSlotsForDate(currentDate);</span>
+<span class="nc" id="L499">                    System.arraycopy(daySlots, 0, slots[day], 0, 8);</span>
+                }
+<span class="nc" id="L501">                return slots;</span>
+            }
+            
+            // 获取该专家的所有有效预约（pending和confirmed状态）
+<span class="fc" id="L505">            List&lt;Appointment&gt; activeAppointments = appointmentRepository.findByExpertAndStatusIn(</span>
+<span class="fc" id="L506">                expert, List.of(&quot;pending&quot;, &quot;confirmed&quot;)</span>
+            );
+            
+<span class="fc" id="L509">            log.info(&quot;找到{}个有效预约&quot;, activeAppointments.size());</span>
+            
+            // 初始化时间表状态 - 从schedule表读取基础状态
+<span class="fc bfc" id="L512" title="All 2 branches covered.">            for (int day = 0; day &lt; 14; day++) {</span>
+<span class="fc" id="L513">                LocalDate currentDate = today.plusDays(day);</span>
+<span class="fc" id="L514">                int[] daySlots = schedule.getSlotsForDate(currentDate);</span>
+<span class="fc" id="L515">                System.arraycopy(daySlots, 0, slots[day], 0, 8);</span>
+            }
+            
+            // 根据有效预约更新状态
+<span class="pc bpc" id="L519" title="1 of 2 branches missed.">            for (Appointment appointment : activeAppointments) {</span>
+<span class="nc" id="L520">                LocalDateTime appointmentTime = appointment.getAppointmentTime();</span>
+<span class="nc" id="L521">                LocalDate appointmentDate = appointmentTime.toLocalDate();</span>
+                
+                // 计算dayOffset
+<span class="nc" id="L524">                int dayOffset = (int) java.time.Duration.between(</span>
+<span class="nc" id="L525">                    today.atStartOfDay(),</span>
+<span class="nc" id="L526">                    appointmentDate.atStartOfDay()</span>
+<span class="nc" id="L527">                ).toDays();</span>
+                
+                // 检查是否在未来14天内
+<span class="nc bnc" id="L530" title="All 4 branches missed.">                if (dayOffset &gt;= 0 &amp;&amp; dayOffset &lt; 14) {</span>
+<span class="nc" id="L531">                    int periodIndex = hourToPeriodIndex(appointmentTime.getHour());</span>
+<span class="nc bnc" id="L532" title="All 4 branches missed.">                    if (periodIndex &gt;= 0 &amp;&amp; periodIndex &lt; 8) {</span>
+                        // 将状态设置为1（已被预约）
+<span class="nc" id="L534">                        slots[dayOffset][periodIndex] = 1;</span>
+<span class="nc" id="L535">                        log.debug(&quot;设置预约状态 - dayOffset: {}, periodIndex: {}, appointmentId: {}&quot;, </span>
+<span class="nc" id="L536">                                dayOffset, periodIndex, appointment.getId());</span>
+                    }
+                }
+<span class="nc" id="L539">            }</span>
+            
+<span class="fc" id="L541">            log.info(&quot;详细时间表状态计算完成&quot;);</span>
+<span class="fc" id="L542">            return slots;</span>
+            
+<span class="nc" id="L544">        } catch (Exception e) {</span>
+<span class="nc" id="L545">            log.error(&quot;获取详细时间表状态失败 - expertId: {}&quot;, expertId, e);</span>
+<span class="nc" id="L546">            throw new RuntimeException(&quot;获取详细时间表状态失败: &quot; + e.getMessage());</span>
+        }
+    }
+
+    @Override
+    public int[][] getDetailedSlotsByUserId(Long userId) {
+        try {
+<span class="fc" id="L553">            log.info(&quot;通过用户ID获取详细时间表状态 - userId: {}&quot;, userId);</span>
+<span class="nc" id="L554">            Expert expert = getOrCreateExpertByUserId(userId);</span>
+<span class="nc" id="L555">            log.info(&quot;找到或创建专家记录 - expertId: {}&quot;, expert.getId());</span>
+<span class="nc" id="L556">            return getDetailedSlots(expert.getId());</span>
+<span class="fc" id="L557">        } catch (Exception e) {</span>
+<span class="fc" id="L558">            log.error(&quot;通过用户ID获取详细时间表状态失败 - userId: {}&quot;, userId, e);</span>
+<span class="fc" id="L559">            throw new RuntimeException(&quot;获取详细时间表状态失败: &quot; + e.getMessage());</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

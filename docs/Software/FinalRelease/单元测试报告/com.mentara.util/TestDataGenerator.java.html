@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TestDataGenerator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.util</a> &gt; <span class="el_source">TestDataGenerator.java</span></div><h1>TestDataGenerator.java</h1><pre class="source lang-java linenums">package com.mentara.util;
+
+import com.mentara.entity.Post;
+import com.mentara.entity.PostLike;
+import com.mentara.entity.PostTag;
+import com.mentara.entity.User;
+import com.mentara.entity.UserAuth;
+import com.mentara.entity.UserRole;
+import com.mentara.enums.MoodType;
+import com.mentara.enums.PostState;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.PostTagRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.repository.PostLikeRepository;
+import com.mentara.repository.CommentRepository;
+import com.mentara.repository.CommentLikeRepository;
+import com.mentara.repository.NotificationRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 测试数据生成器
+ * 用于生成大量测试用户和帖子数据
+ */
+@Component
+<span class="fc" id="L31">public class TestDataGenerator {</span>
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
+    private PostTagRepository postTagRepository;
+
+    @Autowired
+    private PostLikeRepository postLikeRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private CommentLikeRepository commentLikeRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    /**
+     * 生成1000个测试用户
+     */
+    public void generate1000TestUsers() {
+<span class="nc" id="L61">        System.out.println(&quot;开始生成1000个测试用户...&quot;);</span>
+        
+<span class="nc" id="L63">        List&lt;User&gt; users = new ArrayList&lt;&gt;();</span>
+        
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        for (int i = 1; i &lt;= 1000; i++) {</span>
+            // 创建用户
+<span class="nc" id="L67">            User user = new User();</span>
+<span class="nc" id="L68">            user.setUsername(&quot;testuser&quot; + i);</span>
+<span class="nc" id="L69">            user.setNickname(&quot;测试用户&quot; + i);</span>
+<span class="nc" id="L70">            user.setRole(UserRole.USER);</span>
+<span class="nc" id="L71">            user.setIsDisabled(false);</span>
+<span class="nc" id="L72">            user.setReportedCount(0);</span>
+<span class="nc" id="L73">            user.setIsProfilePublic(true);</span>
+<span class="nc" id="L74">            user.setIsDeleted(false);</span>
+<span class="nc" id="L75">            user.setAvatar(&quot;https://api.dicebear.com/7.x/avataaars/svg?seed=testuser&quot; + i);</span>
+            
+            // 创建认证信息
+<span class="nc" id="L78">            UserAuth userAuth = new UserAuth();</span>
+<span class="nc" id="L79">            userAuth.setEmail(&quot;testuser@&quot; + i + &quot;.com&quot;);</span>
+<span class="nc" id="L80">            userAuth.setPassword(passwordEncoder.encode(&quot;000000&quot;));</span>
+<span class="nc" id="L81">            userAuth.setUser(user);</span>
+<span class="nc" id="L82">            user.setUserAuth(userAuth);</span>
+            
+<span class="nc" id="L84">            users.add(user);</span>
+            
+            // 每100个用户输出一次进度
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            if (i % 100 == 0) {</span>
+<span class="nc" id="L88">                System.out.println(&quot;已生成 &quot; + i + &quot; 个用户&quot;);</span>
+            }
+        }
+        
+        // 批量保存用户（UserAuth会通过级联自动保存）
+<span class="nc" id="L93">        userRepository.saveAll(users);</span>
+<span class="nc" id="L94">        System.out.println(&quot;用户和认证信息保存完成&quot;);</span>
+        
+<span class="nc" id="L96">        System.out.println(&quot;1000个测试用户生成完成！&quot;);</span>
+<span class="nc" id="L97">    }</span>
+
+    /**
+     * 生成测试帖子
+     */
+    public void generateTestPosts(int count) {
+<span class="nc" id="L103">        System.out.println(&quot;开始生成 &quot; + count + &quot; 个测试帖子...&quot;);</span>
+        
+<span class="nc" id="L105">        List&lt;User&gt; users = userRepository.findAll();</span>
+<span class="nc" id="L106">        List&lt;PostTag&gt; tags = postTagRepository.findAll();</span>
+        
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if (users.isEmpty()) {</span>
+<span class="nc" id="L109">            System.out.println(&quot;错误：没有找到用户，请先生成测试用户&quot;);</span>
+<span class="nc" id="L110">            return;</span>
+        }
+        
+<span class="nc" id="L113">        List&lt;Post&gt; posts = new ArrayList&lt;&gt;();</span>
+        
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        for (int i = 1; i &lt;= count; i++) {</span>
+<span class="nc" id="L116">            Post post = new Post();</span>
+<span class="nc" id="L117">            post.setTitle(&quot;测试帖子标题 &quot; + i);</span>
+<span class="nc" id="L118">            post.setContent(&quot;这是测试帖子 &quot; + i + &quot; 的内容，用于性能测试。&quot;);</span>
+<span class="nc" id="L119">            post.setMood(MoodType.HAPPY);</span>
+<span class="nc" id="L120">            post.setState(PostState.VALID);</span>
+<span class="nc" id="L121">            post.setLikesCount(0);</span>
+<span class="nc" id="L122">            post.setCommentsCount(0);</span>
+<span class="nc" id="L123">            post.setReportCount(0);</span>
+<span class="nc" id="L124">            post.setIsDeleted(false);</span>
+<span class="nc" id="L125">            post.setIsAnnouncement(false);</span>
+<span class="nc" id="L126">            post.setCreatedAt(LocalDateTime.now());</span>
+            
+            // 随机分配作者
+<span class="nc" id="L129">            User author = users.get(i % users.size());</span>
+<span class="nc" id="L130">            post.setAuthor(author);</span>
+            
+            // 随机分配标签
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            if (!tags.isEmpty()) {</span>
+<span class="nc" id="L134">                List&lt;PostTag&gt; postTags = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L135">                postTags.add(tags.get(i % tags.size()));</span>
+<span class="nc" id="L136">                post.setTags(postTags);</span>
+            }
+            
+<span class="nc" id="L139">            posts.add(post);</span>
+            
+            // 每100个帖子输出一次进度
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (i % 100 == 0) {</span>
+<span class="nc" id="L143">                System.out.println(&quot;已生成 &quot; + i + &quot; 个帖子&quot;);</span>
+            }
+        }
+        
+        // 批量保存帖子
+<span class="nc" id="L148">        postRepository.saveAll(posts);</span>
+<span class="nc" id="L149">        System.out.println(count + &quot; 个测试帖子生成完成！&quot;);</span>
+<span class="nc" id="L150">    }</span>
+
+    /**
+     * 清理测试数据
+     */
+    public void cleanupTestData() {
+<span class="nc" id="L156">        System.out.println(&quot;开始清理测试数据...&quot;);</span>
+        
+        // 获取测试用户ID列表
+<span class="nc" id="L159">        List&lt;Long&gt; testUserIds = userRepository.findAll().stream()</span>
+<span class="nc bnc" id="L160" title="All 4 branches missed.">            .filter(user -&gt; user.getUsername() != null &amp;&amp; user.getUsername().startsWith(&quot;testuser&quot;))</span>
+<span class="nc" id="L161">            .map(User::getId)</span>
+<span class="nc" id="L162">            .toList();</span>
+        
+        // 获取测试帖子ID列表
+<span class="nc" id="L165">        List&lt;Long&gt; testPostIds = postRepository.findAll().stream()</span>
+<span class="nc bnc" id="L166" title="All 4 branches missed.">            .filter(post -&gt; post.getTitle() != null &amp;&amp; post.getTitle().startsWith(&quot;测试帖子标题&quot;))</span>
+<span class="nc" id="L167">            .map(Post::getId)</span>
+<span class="nc" id="L168">            .toList();</span>
+        
+<span class="nc bnc" id="L170" title="All 4 branches missed.">        if (!testUserIds.isEmpty() || !testPostIds.isEmpty()) {</span>
+            // 1. 删除测试帖子相关的点赞记录
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if (!testPostIds.isEmpty()) {</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">                for (Long postId : testPostIds) {</span>
+<span class="nc" id="L174">                    postLikeRepository.deleteByPostId(postId);</span>
+<span class="nc" id="L175">                }</span>
+<span class="nc" id="L176">                System.out.println(&quot;已清理测试帖子点赞数据&quot;);</span>
+            }
+            
+            // 2. 删除测试用户的点赞记录
+<span class="nc bnc" id="L180" title="All 2 branches missed.">            if (!testUserIds.isEmpty()) {</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">                for (Long userId : testUserIds) {</span>
+<span class="nc" id="L182">                    commentLikeRepository.deleteByUserId(userId);</span>
+<span class="nc" id="L183">                }</span>
+<span class="nc" id="L184">                System.out.println(&quot;已清理测试用户点赞数据&quot;);</span>
+            }
+            
+            // 3. 删除测试帖子
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            if (!testPostIds.isEmpty()) {</span>
+<span class="nc" id="L189">                List&lt;Post&gt; testPosts = postRepository.findAllById(testPostIds);</span>
+<span class="nc" id="L190">                postRepository.deleteAll(testPosts);</span>
+<span class="nc" id="L191">                System.out.println(&quot;已删除 &quot; + testPosts.size() + &quot; 个测试帖子&quot;);</span>
+            }
+            
+            // 4. 删除测试用户
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            if (!testUserIds.isEmpty()) {</span>
+<span class="nc" id="L196">                List&lt;User&gt; testUsers = userRepository.findAllById(testUserIds);</span>
+<span class="nc" id="L197">                userRepository.deleteAll(testUsers);</span>
+<span class="nc" id="L198">                System.out.println(&quot;已删除 &quot; + testUsers.size() + &quot; 个测试用户&quot;);</span>
+<span class="nc" id="L199">            }</span>
+        } else {
+<span class="nc" id="L201">            System.out.println(&quot;没有找到需要清理的测试数据&quot;);</span>
+        }
+        
+<span class="nc" id="L204">        System.out.println(&quot;测试数据清理完成！&quot;);</span>
+<span class="nc" id="L205">    }</span>
+
+    /**
+     * 检查测试数据状态
+     */
+    public void checkTestDataStatus() {
+<span class="nc" id="L211">        long userCount = userRepository.count();</span>
+<span class="nc" id="L212">        long testUserCount = userRepository.findAll().stream()</span>
+<span class="nc bnc" id="L213" title="All 4 branches missed.">            .filter(user -&gt; user.getUsername() != null &amp;&amp; user.getUsername().startsWith(&quot;testuser&quot;))</span>
+<span class="nc" id="L214">            .count();</span>
+        
+<span class="nc" id="L216">        long postCount = postRepository.count();</span>
+<span class="nc" id="L217">        long testPostCount = postRepository.findAll().stream()</span>
+<span class="nc bnc" id="L218" title="All 4 branches missed.">            .filter(post -&gt; post.getTitle() != null &amp;&amp; post.getTitle().startsWith(&quot;测试帖子标题&quot;))</span>
+<span class="nc" id="L219">            .count();</span>
+        
+<span class="nc" id="L221">        System.out.println(&quot;=== 测试数据状态 ===&quot;);</span>
+<span class="nc" id="L222">        System.out.println(&quot;总用户数: &quot; + userCount);</span>
+<span class="nc" id="L223">        System.out.println(&quot;测试用户数: &quot; + testUserCount);</span>
+<span class="nc" id="L224">        System.out.println(&quot;总帖子数: &quot; + postCount);</span>
+<span class="nc" id="L225">        System.out.println(&quot;测试帖子数: &quot; + testPostCount);</span>
+<span class="nc" id="L226">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

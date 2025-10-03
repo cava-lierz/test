@@ -1,0 +1,1112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">PostServiceImpl.java</span></div><h1>PostServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.request.PostReportAuditRequest;
+import com.mentara.dto.request.PostRequest;
+import com.mentara.dto.response.PostReportAuditResponse;
+import com.mentara.dto.response.PostResponse;
+import com.mentara.dto.response.ReportedPostResponse;
+import com.mentara.entity.Post;
+import com.mentara.entity.PostLike;
+import com.mentara.entity.Report;
+import com.mentara.entity.User;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.PostLikeRepository;
+import com.mentara.repository.ReportRepository;
+import com.mentara.repository.CommentRepository;
+import com.mentara.repository.CommentLikeRepository;
+import com.mentara.service.*;
+import com.mentara.converter.PostConverter;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.repository.NotificationRepository;
+import com.mentara.enums.MoodType;
+
+import io.qdrant.client.grpc.Points;
+import org.apache.tomcat.util.http.fileupload.FileUpload;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.mentara.converter.NotificationResponseFactory;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.ApplicationContext;
+import com.mentara.dto.response.PostAuditResponse;
+import com.mentara.enums.PostState;
+import org.springframework.security.access.AccessDeniedException;
+
+@Service
+@Transactional
+<span class="fc" id="L50">public class PostServiceImpl implements PostService {</span>
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
+    private PostLikeRepository postLikeRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private PostConverter postConverter;
+
+    @Autowired
+    private TagService tagService;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private NotificationResponseFactory responseFactory;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private CommentLikeRepository commentLikeRepository;
+
+    @Autowired
+    private FileUploadService fileUploadService;
+
+    @Autowired
+    private MoodScoreService moodScoreService;
+
+    @Autowired
+    private QdrantService qdrantService;
+
+    @Autowired
+    private PostReportAuditService postReportAuditService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Autowired
+    private PostAuditService postAuditService;
+
+    @Override
+    @Cacheable(value = &quot;posts&quot;, key = &quot;#postId + '_' + #currentUserId&quot;)
+    public PostResponse findById(Long postId, Long currentUserId) {
+<span class="fc" id="L106">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L107">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 检查帖子是否已被软删除
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="nc" id="L111">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 检查帖子状态是否为VALID（只有已通过的帖子才能被查看）
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L116">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 查询点赞状态
+<span class="fc" id="L120">        boolean isLiked = false;</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (currentUserId != null) {</span>
+<span class="fc" id="L122">            isLiked = postLikeRepository.existsByPostAndUser(post, userService.findById(currentUserId).orElse(null));</span>
+        }
+        
+<span class="fc" id="L125">        return postConverter.toResponse(post, isLiked);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;posts&quot;, key = &quot;'all_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #currentUserId&quot;)
+    public Page&lt;PostResponse&gt; findAllPosts(Pageable pageable, Long currentUserId) {
+        // 只返回已审核通过的帖子
+<span class="fc" id="L132">        Page&lt;Post&gt; postsPage = postRepository.findValidPosts(pageable);</span>
+<span class="fc" id="L133">        return optimizePostResponsePage(postsPage, currentUserId);</span>
+    }
+
+    @Override
+    public Page&lt;PostResponse&gt; searchPosts(String keyword, Pageable pageable, Long currentUserId) {
+        // 如果关键词为空，返回所有帖子
+<span class="pc bpc" id="L139" title="1 of 4 branches missed.">        if (keyword == null || keyword.trim().isEmpty()) {</span>
+<span class="fc" id="L140">            return findAllPosts(pageable, currentUserId);</span>
+        }
+        
+        try {
+            // 通过向量搜索获取相似的帖子ID
+<span class="fc" id="L145">            List&lt;Points.ScoredPoint&gt; postVecs = qdrantService.queryPostVector(keyword);</span>
+            
+<span class="pc bpc" id="L147" title="3 of 4 branches missed.">            if (postVecs == null || postVecs.isEmpty()) {</span>
+                // 如果没有找到相似帖子，返回空的分页结果
+<span class="fc" id="L149">                return Page.empty(pageable);</span>
+            }
+            
+            // 提取帖子ID列表
+<span class="nc" id="L153">            List&lt;Long&gt; postIds = postVecs.stream()</span>
+<span class="nc" id="L154">                .map(postVec -&gt; postVec.getId().getNum())</span>
+<span class="nc" id="L155">                .collect(Collectors.toList());</span>
+            
+            // 根据ID列表查询帖子（只查询未软删除的）
+<span class="nc" id="L158">            List&lt;Post&gt; posts = postRepository.findByIdInAndIsDeletedFalseOrderByCreatedAtDesc(postIds);</span>
+            
+            // 按照向量搜索的相似度顺序重新排序帖子
+<span class="nc" id="L161">            List&lt;Post&gt; sortedPosts = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            for (Long postId : postIds) {</span>
+<span class="nc" id="L163">                posts.stream()</span>
+<span class="nc" id="L164">                    .filter(post -&gt; post.getId().equals(postId))</span>
+<span class="nc" id="L165">                    .findFirst()</span>
+<span class="nc" id="L166">                    .ifPresent(sortedPosts::add);</span>
+<span class="nc" id="L167">            }</span>
+            
+            // 应用分页
+<span class="nc" id="L170">            int start = (int) pageable.getOffset();</span>
+<span class="nc" id="L171">            int end = Math.min(start + pageable.getPageSize(), sortedPosts.size());</span>
+            
+<span class="nc bnc" id="L173" title="All 2 branches missed.">            if (start &gt;= sortedPosts.size()) {</span>
+<span class="nc" id="L174">                return Page.empty(pageable);</span>
+            }
+            
+<span class="nc" id="L177">            List&lt;Post&gt; pagedPosts = sortedPosts.subList(start, end);</span>
+            
+            // 批量查询用户信息，避免N+1查询
+<span class="nc" id="L180">            optimizeUserInfoLoading(pagedPosts);</span>
+            
+            // 批量查询点赞状态
+<span class="nc" id="L183">            Map&lt;Long, Boolean&gt; likeStatusMap = batchQueryLikeStatus(pagedPosts, currentUserId);</span>
+            
+            // 转换为 PostResponse
+<span class="nc" id="L186">            List&lt;PostResponse&gt; postResponses = pagedPosts.stream()</span>
+<span class="nc" id="L187">                .map(post -&gt; postConverter.toResponse(post, likeStatusMap.getOrDefault(post.getId(), false)))</span>
+<span class="nc" id="L188">                .collect(Collectors.toList());</span>
+            
+            // 创建分页结果
+<span class="nc" id="L191">            return new org.springframework.data.domain.PageImpl&lt;&gt;(</span>
+                postResponses, 
+                pageable, 
+<span class="nc" id="L194">                sortedPosts.size()</span>
+            );
+            
+<span class="nc" id="L197">        } catch (Exception e) {</span>
+            // 如果向量搜索失败，回退到普通搜索或返回空结果
+<span class="nc" id="L199">            System.err.println(&quot;向量搜索失败: &quot; + e.getMessage());</span>
+<span class="nc" id="L200">            return Page.empty(pageable);</span>
+        }
+    }
+
+    @Override
+    @Cacheable(value = &quot;posts&quot;, key = &quot;'user_' + #userId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #currentUserId&quot;)
+    public Page&lt;PostResponse&gt; findPostsByUser(Long userId, Pageable pageable, Long currentUserId) {
+        // 只返回已审核通过且未软删除的帖子
+<span class="fc" id="L208">        Page&lt;Post&gt; postsPage = postRepository.findByAuthorIdAndStateAndIsDeletedFalseOrderByCreatedAtDesc(userId, PostState.VALID, pageable);</span>
+<span class="fc" id="L209">        return optimizePostResponsePage(postsPage, currentUserId);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;posts&quot;, key = &quot;'filter_' + #filter + '_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #currentUserId&quot;)
+    public Page&lt;PostResponse&gt; findPostsByFilter(String filter, Pageable pageable, Long currentUserId) {
+<span class="nc" id="L215">        long startTime = System.currentTimeMillis();</span>
+        Page&lt;Post&gt; posts;
+        
+<span class="nc bnc" id="L218" title="All 4 branches missed.">        switch (filter) {</span>
+            case &quot;最新&quot;:
+                // 使用数据库层面查询：最近24小时的已通过帖子
+<span class="nc" id="L221">                LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);</span>
+<span class="nc" id="L222">                posts = postRepository.findByStateAndIsDeletedFalseAndCreatedAtAfterOrderByIsAnnouncementDescCreatedAtDesc(PostState.VALID, twentyFourHoursAgo, pageable);</span>
+<span class="nc" id="L223">                break;</span>
+            case &quot;最热&quot;:
+                // 使用数据库层面查询：点赞数大于等于4的已通过帖子
+<span class="nc" id="L226">                posts = postRepository.findByStateAndIsDeletedFalseAndLikesCountGreaterThanEqualOrderByIsAnnouncementDescLikesCountDesc(PostState.VALID, 4, pageable);</span>
+<span class="nc" id="L227">                break;</span>
+            case &quot;心情&quot;:
+                // 使用数据库层面查询：有心情的已通过帖子
+<span class="nc" id="L230">                posts = postRepository.findByStateAndMoodIsNotNullAndIsDeletedFalseOrderByIsAnnouncementDescCreatedAtDesc(PostState.VALID, pageable);</span>
+<span class="nc" id="L231">                break;</span>
+            default:
+                // 全部：按创建时间排序的已通过帖子
+<span class="nc" id="L234">                posts = postRepository.findValidPosts(pageable);</span>
+                break;
+        }
+        
+<span class="nc" id="L238">        return optimizePostResponsePage(posts, currentUserId);</span>
+    }
+
+    @Override
+    public Page&lt;PostResponse&gt; findPostsByTags(List&lt;Long&gt; tagIds, Pageable pageable, Long currentUserId) {
+<span class="nc bnc" id="L243" title="All 4 branches missed.">        if (tagIds == null || tagIds.isEmpty()) {</span>
+<span class="nc" id="L244">            return findAllPosts(pageable, currentUserId);</span>
+        }
+        // 使用数据库层面查询：按标签筛选已通过的帖子
+<span class="nc" id="L247">        long tagCount = tagIds.size();</span>
+<span class="nc" id="L248">        Page&lt;Post&gt; posts = postRepository.findByStateAndTagIdsAndIsDeletedFalse(PostState.VALID, tagIds, tagCount, pageable);</span>
+<span class="nc" id="L249">        return optimizePostResponsePage(posts, currentUserId);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;posts&quot;, key = &quot;'mood_' + #mood + '_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #currentUserId&quot;)
+    public Page&lt;PostResponse&gt; findPostsByMood(MoodType mood, Pageable pageable, Long currentUserId) {
+        // 使用数据库层面查询：按心情类型筛选已通过的帖子
+<span class="nc" id="L256">        Page&lt;Post&gt; posts = postRepository.findByStateAndMoodAndIsDeletedFalseOrderByIsAnnouncementDescCreatedAtDesc(PostState.VALID, mood, pageable);</span>
+<span class="nc" id="L257">        return optimizePostResponsePage(posts, currentUserId);</span>
+    }
+
+    /**
+     * 获取待审核的帖子（管理员功能）
+     */
+    public Page&lt;PostResponse&gt; getPendingAuditPosts(Pageable pageable) {
+<span class="fc" id="L264">        Page&lt;Post&gt; postsPage = postRepository.findPendingAuditPosts(pageable);</span>
+<span class="fc" id="L265">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+
+    /**
+     * 获取需要人工审核的帖子（管理员功能）
+     */
+    public Page&lt;PostResponse&gt; getNeedAdminCheckPosts(Pageable pageable) {
+<span class="fc" id="L272">        Page&lt;Post&gt; postsPage = postRepository.findNeedAdminCheckPosts(pageable);</span>
+<span class="pc" id="L273">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+
+    /**
+     * 获取已拒绝的帖子（管理员功能）
+     */
+    public Page&lt;PostResponse&gt; getInvalidPosts(Pageable pageable) {
+<span class="fc" id="L280">        Page&lt;Post&gt; postsPage = postRepository.findInvalidPosts(pageable);</span>
+<span class="fc" id="L281">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+
+    /**
+     * 获取已删除的帖子（管理员功能）
+     */
+    public Page&lt;PostResponse&gt; getDeletedPosts(Pageable pageable) {
+<span class="fc" id="L288">        Page&lt;Post&gt; postsPage = postRepository.findDeletedPosts(pageable);</span>
+<span class="fc" id="L289">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void approvePost(Long postId) {
+<span class="fc" id="L296">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L297">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+<span class="fc" id="L298">        post.setState(PostState.VALID);</span>
+        // 确保审核通过的帖子reportCount为0    post.setReportCount(0);
+<span class="fc" id="L300">        postRepository.save(post);</span>
+<span class="fc" id="L301">    }</span>
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void rejectPost(Long postId) {
+<span class="fc" id="L307">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L308">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+<span class="fc" id="L309">        post.setState(PostState.INVALID);</span>
+<span class="fc" id="L310">        post.setIsDeleted(true);</span>
+<span class="fc" id="L311">        post.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L312">        post.setDeletedBy(null); // 管理员删除</span>
+<span class="fc" id="L313">        post.setDeleteReason(&quot;管理员拒绝&quot;);</span>
+        // 确保审核删除的帖子reportCount为0，以区分被举报删除的帖子
+<span class="fc" id="L315">        post.setReportCount(0);</span>
+<span class="fc" id="L316">        postRepository.save(post);</span>
+<span class="fc" id="L317">    }</span>
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void deletePostByAdmin(Long postId) {
+<span class="fc" id="L323">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L324">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 软删除帖子
+<span class="fc" id="L327">        post.setIsDeleted(true);</span>
+<span class="fc" id="L328">        post.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L329">        post.setDeletedBy(null); // 管理员删除</span>
+<span class="fc" id="L330">        post.setDeleteReason(&quot;管理员删除&quot;);</span>
+        
+        // 更新所有相关举报记录的状态为VALID
+<span class="fc" id="L333">        List&lt;Report&gt; reports = reportRepository.findByPostOrderByCreatedAtDesc(post);</span>
+<span class="pc bpc" id="L334" title="1 of 2 branches missed.">        for (Report report : reports) {</span>
+<span class="nc" id="L335">            report.setState(Report.State.VALID);</span>
+<span class="nc" id="L336">        }</span>
+<span class="fc" id="L337">        reportRepository.saveAll(reports);</span>
+        
+<span class="fc" id="L339">        postRepository.save(post);</span>
+<span class="fc" id="L340">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void changePostStatus(Long postId, String status) {
+<span class="fc" id="L346">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L347">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 根据状态参数改变帖子状态
+<span class="pc bpc" id="L350" title="1 of 2 branches missed.">        if (&quot;VALID&quot;.equals(status)) {</span>
+<span class="nc" id="L351">            post.setState(PostState.VALID);</span>
+            // 如果帖子被软删除，恢复它
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (post.getIsDeleted()) {</span>
+<span class="nc" id="L354">                post.setIsDeleted(false);</span>
+<span class="nc" id="L355">                post.setDeletedAt(null);</span>
+<span class="nc" id="L356">                post.setDeletedBy(null);</span>
+<span class="nc" id="L357">                post.setDeleteReason(null);</span>
+            }
+<span class="fc bfc" id="L359" title="All 2 branches covered.">        } else if (&quot;INVALID&quot;.equals(status)) {</span>
+<span class="fc" id="L360">            post.setState(PostState.INVALID);</span>
+            // 软删除帖子
+<span class="fc" id="L362">            post.setIsDeleted(true);</span>
+<span class="fc" id="L363">            post.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L364">            post.setDeletedBy(null); // 管理员操作</span>
+<span class="fc" id="L365">            post.setDeleteReason(&quot;管理员驳回举报&quot;);</span>
+        } else {
+<span class="fc" id="L367">            throw new IllegalArgumentException(&quot;无效的状态值: &quot; + status);</span>
+        }
+        
+        // 更新所有相关举报记录的状态
+<span class="fc" id="L371">        List&lt;Report&gt; reports = reportRepository.findByPostOrderByCreatedAtDesc(post);</span>
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">        for (Report report : reports) {</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            if (&quot;VALID&quot;.equals(status)) {</span>
+<span class="nc" id="L374">                report.setState(Report.State.INVALID); // 驳回举报</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            } else if (&quot;INVALID&quot;.equals(status)) {</span>
+<span class="nc" id="L376">                report.setState(Report.State.VALID); // 通过举报</span>
+            }
+<span class="nc" id="L378">        }</span>
+<span class="fc" id="L379">        reportRepository.saveAll(reports);</span>
+        
+<span class="fc" id="L381">        postRepository.save(post);</span>
+<span class="fc" id="L382">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void approvePostReport(Long postId) {
+<span class="fc" id="L388">        Post post = postRepository.findById(postId)</span>
+<span class="pc" id="L389">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 软删除帖子
+<span class="nc" id="L392">        post.setIsDeleted(true);</span>
+<span class="nc" id="L393">        post.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L394">        post.setDeletedBy(null); // 管理员删除</span>
+<span class="nc" id="L395">        post.setDeleteReason(&quot;管理员通过举报删除&quot;);</span>
+        
+        // 更新所有相关举报记录的状态为VALID
+<span class="nc" id="L398">        List&lt;Report&gt; reports = reportRepository.findByPostOrderByCreatedAtDesc(post);</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">        for (Report report : reports) {</span>
+<span class="nc" id="L400">            report.setState(Report.State.VALID);</span>
+<span class="nc" id="L401">        }</span>
+<span class="nc" id="L402">        reportRepository.saveAll(reports);</span>
+        
+<span class="nc" id="L404">        postRepository.save(post);</span>
+<span class="nc" id="L405">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public PostResponse createPostForUser(PostRequest postRequest, Long currentUserId) {
+<span class="fc bfc" id="L411" title="All 2 branches covered.">        if (Boolean.TRUE.equals(postRequest.getIsAnnouncement())) {</span>
+<span class="fc" id="L412">            User user = userService.findById(currentUserId)</span>
+<span class="pc" id="L413">                .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, currentUserId));</span>
+<span class="fc bfc" id="L414" title="All 2 branches covered.">            if (!user.isAdmin()) {</span>
+<span class="fc" id="L415">                throw new AccessDeniedException(&quot;只有管理员可以发布公告帖&quot;);</span>
+            }
+        }
+<span class="fc" id="L418">        System.out.println(&quot;=== 开始创建Post ===&quot;);</span>
+<span class="fc" id="L419">        System.out.println(&quot;当前线程: &quot; + Thread.currentThread().getName());</span>
+        
+<span class="fc" id="L421">        User user = userService.findById(currentUserId)</span>
+<span class="pc" id="L422">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, currentUserId));</span>
+        
+<span class="fc" id="L424">        Post post = new Post();</span>
+<span class="fc" id="L425">        post.setTitle(postRequest.getTitle());</span>
+<span class="fc" id="L426">        post.setContent(postRequest.getContent());</span>
+<span class="pc bpc" id="L427" title="1 of 2 branches missed.">        post.setIsAnnouncement(postRequest.getIsAnnouncement() != null ? postRequest.getIsAnnouncement() : false);</span>
+        
+        // 公告帖子不需要心情和标签
+<span class="fc bfc" id="L430" title="All 2 branches covered.">        if (!post.getIsAnnouncement()) {</span>
+<span class="fc" id="L431">            post.setMood(postRequest.getMood());</span>
+<span class="fc bfc" id="L432" title="All 4 branches covered.">            if (postRequest.getTagIds() != null &amp;&amp; !postRequest.getTagIds().isEmpty()) {</span>
+<span class="fc" id="L433">                post.setTags(postRequest.getTagIds().stream()</span>
+<span class="fc" id="L434">                    .map(tagService::findById)</span>
+<span class="fc" id="L435">                    .collect(Collectors.toList()));</span>
+            } else {
+<span class="fc" id="L437">                post.setTags(new ArrayList&lt;&gt;());</span>
+            }
+
+        } else {
+            // 公告帖子设置为null
+<span class="fc" id="L442">            post.setMood(null);</span>
+<span class="fc" id="L443">            post.setTags(new ArrayList&lt;&gt;());</span>
+        }
+        
+<span class="fc" id="L446">        post.setImageUrls(postRequest.getImageUrls());</span>
+<span class="fc" id="L447">        post.setAuthor(user);</span>
+<span class="fc" id="L448">        post.setCreatedAt(LocalDateTime.now());</span>
+        
+        // 设置初始状态为待审核
+<span class="fc" id="L451">        post.setState(PostState.PENDING);</span>
+        
+<span class="fc" id="L453">        Post savedPost = postRepository.save(post);</span>
+
+        // 异步处理向量存储和心情评分（非公告帖子）
+<span class="fc bfc" id="L456" title="All 2 branches covered.">        if (!savedPost.getIsAnnouncement()) {</span>
+            try {
+                // 通过ApplicationContext调用确保AOP代理生效
+<span class="fc" id="L459">                PostServiceImpl self = applicationContext.getBean(PostServiceImpl.class);</span>
+                
+                // 分别异步处理向量存储和心情评分
+<span class="fc" id="L462">                self.processPostVectorAsync(savedPost);</span>
+<span class="fc" id="L463">                self.processMoodScoreAsync(savedPost.getId(), currentUserId, postRequest.getContent());</span>
+                
+<span class="nc" id="L465">            } catch (Exception e) {</span>
+                // 记录错误但不影响post的创建
+<span class="nc" id="L467">                System.err.println(&quot;启动异步向量存储和心情评分失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L468">            }</span>
+        }
+
+        // 异步处理内容审核 - 通过ApplicationContext调用确保AOP代理生效
+<span class="fc" id="L472">        System.out.println(&quot;=== 开始异步内容审核 ===&quot;);</span>
+<span class="fc" id="L473">        PostServiceImpl self = applicationContext.getBean(PostServiceImpl.class);</span>
+<span class="fc" id="L474">        self.processPostAuditAsync(savedPost);</span>
+<span class="fc" id="L475">        System.out.println(&quot;=== 异步审核已启动，主线程继续执行 ===&quot;);</span>
+
+<span class="fc" id="L477">        System.out.println(&quot;=== Post创建完成（等待审核） ===&quot;);</span>
+        // 返回待审核状态的帖子响应
+<span class="fc" id="L479">        return postConverter.toResponse(savedPost, false);</span>
+    }
+
+    /**
+     * 异步处理向量存储和心情评分
+     */
+    @Async(&quot;aiAuditExecutor&quot;)
+    public void processPostVectorAndMoodScoreAsync(Post post, Long currentUserId, String content) {
+<span class="nc" id="L487">        System.out.println(&quot;=== 异步线程开始处理向量存储和心情评分 ===&quot;);</span>
+<span class="nc" id="L488">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="nc" id="L489">        System.out.println(&quot;postId: &quot; + post.getId() + &quot;, authorId: &quot; + post.getAuthor().getId());</span>
+        
+<span class="nc" id="L491">        long asyncStartTime = System.currentTimeMillis();</span>
+        
+        try {
+            // 异步存储向量
+<span class="nc" id="L495">            System.out.println(&quot;=== 开始异步向量存储 ===&quot;);</span>
+<span class="nc" id="L496">            long vectorStartTime = System.currentTimeMillis();</span>
+<span class="nc" id="L497">            qdrantService.upsertPostVector(post);</span>
+<span class="nc" id="L498">            long vectorEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L499">            System.out.println(&quot;=== 向量存储完成，耗时: &quot; + (vectorEndTime - vectorStartTime) + &quot;ms ===&quot;);</span>
+
+            // 异步创建心情评分
+<span class="nc" id="L502">            System.out.println(&quot;=== 开始异步心情评分 ===&quot;);</span>
+<span class="nc" id="L503">            long moodStartTime = System.currentTimeMillis();</span>
+<span class="nc" id="L504">            moodScoreService.createMoodScoreForPost(post.getId(), currentUserId, content);</span>
+<span class="nc" id="L505">            long moodEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L506">            System.out.println(&quot;=== 心情评分完成，耗时: &quot; + (moodEndTime - moodStartTime) + &quot;ms ===&quot;);</span>
+
+<span class="nc" id="L508">            long asyncEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L509">            System.out.println(&quot;=== 异步向量存储和心情评分完成，总耗时: &quot; + (asyncEndTime - asyncStartTime) + &quot;ms ===&quot;);</span>
+
+<span class="nc" id="L511">        } catch (Exception e) {</span>
+<span class="nc" id="L512">            System.err.println(&quot;异步处理向量存储和心情评分时发生异常: &quot;+e.getMessage());</span>
+<span class="nc" id="L513">            e.printStackTrace();</span>
+<span class="nc" id="L514">        }</span>
+<span class="nc" id="L515">    }</span>
+
+    /**
+     * 异步处理向量存储
+     */
+    @Async(&quot;vectorExecutor&quot;)
+    public void processPostVectorAsync(Post post) {
+<span class="fc" id="L522">        System.out.println(&quot;=== 异步线程开始处理向量存储 ===&quot;);</span>
+<span class="fc" id="L523">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="fc" id="L524">        System.out.println(&quot;postId: &quot; + post.getId());</span>
+        
+<span class="fc" id="L526">        long startTime = System.currentTimeMillis();</span>
+        
+        try {
+<span class="fc" id="L529">            qdrantService.upsertPostVector(post);</span>
+<span class="fc" id="L530">            long endTime = System.currentTimeMillis();</span>
+<span class="fc" id="L531">            System.out.println(&quot;=== 向量存储完成，耗时: &quot; + (endTime - startTime) + &quot;ms ===&quot;);</span>
+<span class="nc" id="L532">        } catch (Exception e) {</span>
+<span class="nc" id="L533">            System.err.println(&quot;异步向量存储失败: &quot; + e.getMessage());</span>
+<span class="nc" id="L534">            e.printStackTrace();</span>
+<span class="fc" id="L535">        }</span>
+<span class="fc" id="L536">    }</span>
+
+    /**
+     * 异步处理心情评分
+     */
+    @Async(&quot;moodScoreExecutor&quot;)
+    public void processMoodScoreAsync(Long postId, Long currentUserId, String content) {
+<span class="fc" id="L543">        System.out.println(&quot;=== 异步线程开始处理心情评分 ===&quot;);</span>
+<span class="fc" id="L544">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="fc" id="L545">        System.out.println(&quot;postId: &quot; + postId + &quot;, userId: &quot; + currentUserId);</span>
+        
+<span class="fc" id="L547">        long startTime = System.currentTimeMillis();</span>
+        
+        try {
+<span class="nc" id="L550">            moodScoreService.createMoodScoreForPost(postId, currentUserId, content);</span>
+<span class="nc" id="L551">            long endTime = System.currentTimeMillis();</span>
+<span class="nc" id="L552">            System.out.println(&quot;=== 心情评分完成，耗时: &quot; + (endTime - startTime) + &quot;ms ===&quot;);</span>
+<span class="fc" id="L553">        } catch (Exception e) {</span>
+<span class="fc" id="L554">            System.err.println(&quot;异步心情评分失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L555">            e.printStackTrace();</span>
+<span class="nc" id="L556">        }</span>
+<span class="fc" id="L557">    }</span>
+
+    /**
+     * 异步处理Post内容审核
+     */
+    @Async(&quot;aiAuditExecutor&quot;)
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void processPostAuditAsync(Post post) {
+<span class="fc" id="L565">        System.out.println(&quot;=== 异步线程开始处理内容审核 ===&quot;);</span>
+<span class="fc" id="L566">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="fc" id="L567">        System.out.println(&quot;postId: &quot; + post.getId() + &quot;, authorId: &quot; + post.getAuthor().getId());</span>
+        
+<span class="fc" id="L569">        long asyncStartTime = System.currentTimeMillis();</span>
+        
+        try {
+<span class="fc" id="L572">            System.out.println(&quot;开始异步处理Post内容审核，postId : &quot;+post.getId());</span>
+
+<span class="fc" id="L574">            System.out.println(&quot;=== 开始调用AI审核服务 ===&quot;);</span>
+<span class="fc" id="L575">            long aiStartTime = System.currentTimeMillis();</span>
+            
+            // 执行AI审核
+<span class="nc" id="L578">            PostAuditResponse auditResponse = postAuditService.auditPostContent(post);</span>
+            
+<span class="nc" id="L580">            long aiEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L581">            System.out.println(&quot;=== AI审核完成，耗时: &quot; + (aiEndTime - aiStartTime) + &quot;ms ===&quot;);</span>
+
+            // 根据审核结果更新帖子状态
+<span class="nc bnc" id="L584" title="All 2 branches missed.">            if (auditResponse.getIsCompliant()) {</span>
+<span class="nc" id="L585">                System.out.println(&quot;AI审核认为内容合规: &quot;+auditResponse.getAuditReason());</span>
+                // 设置为已通过状态
+<span class="nc" id="L587">                post.setState(PostState.VALID);</span>
+<span class="nc" id="L588">                postRepository.save(post);</span>
+<span class="nc" id="L589">                System.out.println(&quot;帖子状态已更新为：已通过&quot;);</span>
+            } else {
+<span class="nc" id="L591">                System.out.println(&quot;AI审核认为内容不合规: &quot;+auditResponse.getAuditReason());</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">                if (auditResponse.getNeedAdminCheck()) {</span>
+<span class="nc" id="L593">                    System.out.println(&quot;需要人工审核，设置为等待人工审核状态&quot;);</span>
+<span class="nc" id="L594">                    post.setState(PostState.WAITING);</span>
+                    // 确保审核WAITING状态的帖子reportCount为0
+<span class="nc" id="L596">                    post.setReportCount(0);</span>
+<span class="nc" id="L597">                    postRepository.save(post);</span>
+                } else {
+<span class="nc" id="L599">                    System.out.println(&quot;内容严重违规，设置为已拒绝状态并软删除&quot;);</span>
+<span class="nc" id="L600">                    post.setState(PostState.INVALID);</span>
+<span class="nc" id="L601">                    post.setIsDeleted(true);</span>
+<span class="nc" id="L602">                    post.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L603">                    post.setDeletedBy(null); // AI删除，没有具体用户</span>
+<span class="nc" id="L604">                    post.setDeleteReason(&quot;AI审核拒绝：&quot; + auditResponse.getAuditReason());</span>
+                    // 确保审核删除的帖子reportCount为0，以区分被举报删除的帖子
+<span class="nc" id="L606">                    post.setReportCount(0);</span>
+<span class="nc" id="L607">                    postRepository.save(post);</span>
+                }
+            }
+
+<span class="nc" id="L611">            long asyncEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L612">            System.out.println(&quot;=== 异步审核完成，总耗时: &quot; + (asyncEndTime - asyncStartTime) + &quot;ms ===&quot;);</span>
+
+<span class="nc" id="L614">        } catch (Exception e) {</span>
+<span class="nc" id="L615">            System.err.println(&quot;异步处理Post内容审核时发生异常: &quot;+e.getMessage());</span>
+<span class="nc" id="L616">            e.printStackTrace();</span>
+            // 发生异常时，设置为等待人工审核状态
+            try {
+<span class="nc" id="L619">                post.setState(PostState.WAITING);</span>
+                // 确保审核WAITING状态的帖子reportCount为0
+<span class="nc" id="L621">                post.setReportCount(0);</span>
+<span class="nc" id="L622">                postRepository.save(post);</span>
+<span class="nc" id="L623">                System.out.println(&quot;异常处理完成，帖子状态已设置为：等待人工审核&quot;);</span>
+<span class="nc" id="L624">            } catch (Exception saveException) {</span>
+<span class="nc" id="L625">                System.err.println(&quot;保存帖子状态时发生异常: &quot;+saveException.getMessage());</span>
+<span class="nc" id="L626">            }</span>
+<span class="nc" id="L627">        }</span>
+<span class="nc" id="L628">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void deletePost(Long postId, Long currentUserId) {
+<span class="fc" id="L634">        Post post = postRepository.findById(postId)</span>
+<span class="pc" id="L635">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+<span class="fc bfc" id="L636" title="All 2 branches covered.">        if (!canUserDeletePost(postId, currentUserId)) {</span>
+<span class="fc" id="L637">            throw new AccessDeniedException(&quot;只有作者可以删除帖子&quot;);</span>
+        }
+        
+        // 软删除帖子
+<span class="fc" id="L641">        post.setIsDeleted(true);</span>
+<span class="fc" id="L642">        post.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L643">        post.setDeletedBy(currentUserId);</span>
+<span class="fc" id="L644">        post.setDeleteReason(&quot;用户删除&quot;);</span>
+        
+        // 删除帖子的图片
+<span class="fc" id="L647">        post.getImageUrls().stream().forEach(fileUploadService::deletePostImage);</span>
+        
+        // 保存软删除的帖子
+<span class="fc" id="L650">        postRepository.save(post);</span>
+        
+        // 从向量数据库中删除帖子向量
+<span class="fc" id="L653">        qdrantService.deletePostVector(post);</span>
+<span class="fc" id="L654">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void likePost(Long postId, Long userId) {
+<span class="fc" id="L660">        Optional&lt;Post&gt; postOpt = postRepository.findById(postId);</span>
+<span class="fc" id="L661">        Optional&lt;User&gt; userOpt = userService.findById(userId);</span>
+<span class="fc bfc" id="L662" title="All 2 branches covered.">        if (postOpt.isEmpty()) {</span>
+<span class="fc" id="L663">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+<span class="pc bpc" id="L665" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L666">            throw new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId);</span>
+        }
+<span class="fc" id="L668">        Post post = postOpt.get();</span>
+<span class="fc" id="L669">        User user = userOpt.get();</span>
+        
+        // 检查帖子是否已被软删除
+<span class="pc bpc" id="L672" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="nc" id="L673">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 检查帖子状态是否为VALID（只有已通过的帖子才能被点赞）
+<span class="pc bpc" id="L677" title="1 of 2 branches missed.">        if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L678">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+<span class="pc bpc" id="L681" title="1 of 2 branches missed.">        if (!postLikeRepository.existsByPostAndUser(post, user)) {</span>
+<span class="fc" id="L682">            PostLike like = new PostLike();</span>
+<span class="fc" id="L683">            like.setPost(post);</span>
+<span class="fc" id="L684">            like.setUser(user);</span>
+<span class="fc" id="L685">            postLikeRepository.save(like);</span>
+<span class="fc" id="L686">            postRepository.updateLikeCount(postId, 1);</span>
+<span class="fc" id="L687">            notificationService.createAndSendPostLikeNotification(post, user);</span>
+        }
+<span class="fc" id="L689">    }</span>
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void unlikePost(Long postId, Long userId) {
+<span class="fc" id="L695">        Optional&lt;Post&gt; postOpt = postRepository.findById(postId);</span>
+<span class="fc" id="L696">        Optional&lt;User&gt; userOpt = userService.findById(userId);</span>
+<span class="pc bpc" id="L697" title="1 of 2 branches missed.">        if (postOpt.isEmpty()) {</span>
+<span class="nc" id="L698">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+<span class="pc bpc" id="L700" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L701">            throw new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId);</span>
+        }
+<span class="fc" id="L703">        Post post = postOpt.get();</span>
+<span class="fc" id="L704">        User user = userOpt.get();</span>
+        
+        // 检查帖子是否已被软删除
+<span class="pc bpc" id="L707" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="nc" id="L708">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 检查帖子状态是否为VALID（只有已通过的帖子才能被取消点赞）
+<span class="pc bpc" id="L712" title="1 of 2 branches missed.">        if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L713">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+<span class="pc bpc" id="L716" title="1 of 2 branches missed.">        if (postLikeRepository.existsByPostAndUser(post, user)) {</span>
+<span class="fc" id="L717">            postLikeRepository.deleteByPostAndUser(post, user);</span>
+<span class="fc" id="L718">            postRepository.updateLikeCount(postId, -1);</span>
+        }
+<span class="fc" id="L720">    }</span>
+
+
+
+    @Override
+    public boolean isPostLikedByUser(Long postId, Long userId) {
+<span class="fc" id="L726">        Optional&lt;Post&gt; postOpt = postRepository.findById(postId);</span>
+<span class="fc" id="L727">        Optional&lt;User&gt; userOpt = userService.findById(userId);  </span>
+<span class="pc bpc" id="L728" title="1 of 4 branches missed.">        if (postOpt.isPresent() &amp;&amp; userOpt.isPresent()) {</span>
+<span class="fc" id="L729">            Post post = postOpt.get();</span>
+<span class="fc" id="L730">            User user = userOpt.get();</span>
+            
+            // 检查帖子是否已被软删除
+<span class="pc bpc" id="L733" title="1 of 2 branches missed.">            if (post.getIsDeleted()) {</span>
+<span class="nc" id="L734">                return false; // 已删除的帖子无法被点赞</span>
+            }
+            
+            // 检查帖子状态是否为VALID（只有已通过的帖子才能被点赞）
+<span class="pc bpc" id="L738" title="1 of 2 branches missed.">            if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L739">                return false; // 非VALID状态的帖子无法被点赞</span>
+            }
+            
+<span class="fc" id="L742">            return postLikeRepository.existsByPostAndUser(post, user);</span>
+        }
+<span class="fc" id="L744">        return false;</span>
+    }
+
+    @Override
+    public boolean canUserDeletePost(Long postId, Long userId) {
+<span class="fc" id="L749">        Optional&lt;Post&gt; postOpt = postRepository.findById(postId);</span>
+<span class="fc" id="L750">        Optional&lt;User&gt; userOpt = userService.findById(userId);</span>
+<span class="pc bpc" id="L751" title="2 of 4 branches missed.">        if (postOpt.isPresent() &amp;&amp; userOpt.isPresent()) {</span>
+<span class="fc" id="L752">            Post post = postOpt.get();</span>
+            
+            // 检查帖子是否已被软删除
+<span class="pc bpc" id="L755" title="1 of 2 branches missed.">            if (post.getIsDeleted()) {</span>
+<span class="nc" id="L756">                return false; // 已删除的帖子无法再次删除</span>
+            }
+            
+            // 检查帖子状态是否为VALID（只有已通过的帖子才能被删除）
+<span class="pc bpc" id="L760" title="1 of 2 branches missed.">            if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L761">                return false; // 非VALID状态的帖子无法被删除</span>
+            }
+            
+<span class="fc" id="L764">            return post.getAuthor().getId().equals(userId);</span>
+        }
+<span class="nc" id="L766">        return false;</span>
+    }
+
+    // 举报相关方法实现
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void reportPost(Long postId, Long currentUserId, String reason) {
+<span class="fc" id="L774">        System.out.println(&quot;=== 开始处理举报请求 ===&quot;);</span>
+<span class="fc" id="L775">        System.out.println(&quot;postId: &quot; + postId + &quot;, currentUserId: &quot; + currentUserId + &quot;, reason: &quot; + reason);</span>
+<span class="fc" id="L776">        System.out.println(&quot;当前线程: &quot; + Thread.currentThread().getName());</span>
+        
+<span class="fc" id="L778">        Post post = postRepository.findById(postId)</span>
+<span class="pc" id="L779">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+<span class="fc" id="L781">        User user = userService.findById(currentUserId)</span>
+<span class="pc" id="L782">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, currentUserId));</span>
+        
+        // 检查帖子是否已被软删除
+<span class="pc bpc" id="L785" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="nc" id="L786">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 检查帖子状态是否为VALID（只有已通过的帖子才能被举报）
+<span class="pc bpc" id="L790" title="1 of 2 branches missed.">        if (post.getState() != PostState.VALID) {</span>
+<span class="nc" id="L791">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 检查是否是自己的帖子
+<span class="pc bpc" id="L795" title="1 of 2 branches missed.">        if (post.getAuthor().getId().equals(currentUserId)) {</span>
+<span class="nc" id="L796">            throw new RuntimeException(&quot;不能举报自己的帖子&quot;);</span>
+        }
+        
+        // 检查是否已经举报过
+<span class="pc bpc" id="L800" title="1 of 2 branches missed.">        if (reportRepository.existsByUserAndPost(user, post)) {</span>
+<span class="nc" id="L801">            throw new RuntimeException(&quot;您已经举报过这个帖子&quot;);</span>
+        }
+        
+<span class="fc" id="L804">        System.out.println(&quot;=== 开始同步处理举报记录 ===&quot;);</span>
+<span class="fc" id="L805">        long syncStartTime = System.currentTimeMillis();</span>
+        
+        // 创建举报记录
+<span class="fc" id="L808">        Report report = new Report();</span>
+<span class="fc" id="L809">        report.setPost(post);</span>
+<span class="fc" id="L810">        report.setReason(reason);</span>
+<span class="fc" id="L811">        report.setUser(user);</span>
+<span class="fc" id="L812">        report = reportRepository.save(report);</span>
+        
+        // 增加帖子的举报次数
+<span class="fc" id="L815">        post.setReportCount(post.getReportCount() + 1);</span>
+<span class="fc" id="L816">        postRepository.save(post);</span>
+        
+        // 增加被举报用户的举报次数（持久化存储）
+<span class="fc" id="L819">        userService.incrementReportedCount(post.getAuthor().getId());</span>
+
+<span class="fc" id="L821">        long syncEndTime = System.currentTimeMillis();</span>
+<span class="fc" id="L822">        System.out.println(&quot;=== 同步处理完成，耗时: &quot; + (syncEndTime - syncStartTime) + &quot;ms ===&quot;);</span>
+
+        // 异步处理AI审核 - 通过ApplicationContext调用确保AOP代理生效
+<span class="fc" id="L825">        System.out.println(&quot;=== 开始异步处理AI审核 ===&quot;);</span>
+<span class="fc" id="L826">        PostServiceImpl self = applicationContext.getBean(PostServiceImpl.class);</span>
+<span class="fc" id="L827">        self.processPostReportAuditAsync(report, post, reason);</span>
+<span class="fc" id="L828">        System.out.println(&quot;=== 异步处理已启动，主线程继续执行 ===&quot;);</span>
+<span class="fc" id="L829">    }</span>
+
+    /**
+     * 异步处理Post举报并自动审核
+     */
+    @Async(&quot;aiAuditExecutor&quot;)
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void processPostReportAuditAsync(Report report, Post post, String reason) {
+<span class="fc" id="L837">        System.out.println(&quot;=== 异步线程开始处理AI审核 ===&quot;);</span>
+<span class="fc" id="L838">        System.out.println(&quot;线程名称: &quot; + Thread.currentThread().getName());</span>
+<span class="fc" id="L839">        System.out.println(&quot;postId: &quot; + post.getId() + &quot;, userId: &quot; + report.getUser().getId());</span>
+        
+<span class="fc" id="L841">        long asyncStartTime = System.currentTimeMillis();</span>
+        
+        try {
+<span class="fc" id="L844">            System.out.println(&quot;开始异步处理Post举报并自动审核，postId : &quot;+post.getId()+ &quot; userId :&quot; +report.getUser().getId());</span>
+
+            // 构建审核请求
+<span class="fc" id="L847">            PostReportAuditRequest auditRequest = PostReportAuditRequest.builder()</span>
+<span class="fc" id="L848">                    .reportReason(reason)</span>
+<span class="fc" id="L849">                    .postTitle(post.getTitle())</span>
+<span class="fc" id="L850">                    .postContent(post.getContent())</span>
+<span class="fc" id="L851">                    .build();</span>
+
+<span class="fc" id="L853">            System.out.println(&quot;=== 开始调用AI审核服务 ===&quot;);</span>
+<span class="fc" id="L854">            long aiStartTime = System.currentTimeMillis();</span>
+            
+            // 执行AI审核
+<span class="nc" id="L857">            PostReportAuditResponse auditResponse = postReportAuditService.auditPostReport(auditRequest);</span>
+
+<span class="nc" id="L859">            long aiEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L860">            System.out.println(&quot;=== AI审核完成，耗时: &quot; + (aiEndTime - aiStartTime) + &quot;ms ===&quot;);</span>
+
+            // 根据审核结果统一处理举报和帖子状态
+<span class="nc bnc" id="L863" title="All 2 branches missed.">            if (auditResponse.getNeedAdminCheck()) {</span>
+<span class="nc" id="L864">                System.out.println(&quot;AI审核认为需要人工审核: &quot;+auditResponse.getAuditReason());</span>
+                // 举报和帖子都设置为等待人工审核状态，保持reportCount &gt;0
+<span class="nc" id="L866">                report.setState(Report.State.WAITING);</span>
+<span class="nc" id="L867">                post.setState(PostState.WAITING);</span>
+                // 保持reportCount &gt; 0，表示这是被举报的帖子
+<span class="nc" id="L869">                reportRepository.save(report);</span>
+<span class="nc" id="L870">                postRepository.save(post);</span>
+            } else {
+<span class="nc bnc" id="L872" title="All 2 branches missed.">                if (auditResponse.getIsValidReport()) {</span>
+<span class="nc" id="L873">                    System.out.println(&quot;AI审核认为举报有效，帖子将被标记为无效: &quot;+auditResponse.getAuditReason());</span>
+                    // 举报有效，帖子变为无效（保持reportCount &gt; 0，表示被举报删除）
+<span class="nc" id="L875">                    report.setState(Report.State.VALID);</span>
+<span class="nc" id="L876">                    post.setState(PostState.INVALID);</span>
+<span class="nc" id="L877">                    post.setIsDeleted(true);</span>
+<span class="nc" id="L878">                    post.setDeletedAt(LocalDateTime.now());</span>
+<span class="nc" id="L879">                    post.setDeletedBy(null); // AI删除</span>
+<span class="nc" id="L880">                    post.setDeleteReason(&quot;AI审核举报有效：&quot; + auditResponse.getAuditReason());</span>
+                    // 保持reportCount &gt; 0，表示被举报删除
+<span class="nc" id="L882">                    reportRepository.save(report);</span>
+<span class="nc" id="L883">                    postRepository.save(post);</span>
+                } else {
+<span class="nc" id="L885">                    System.out.println(&quot;AI审核认为举报无效，帖子保持有效: &quot;+auditResponse.getAuditReason());</span>
+                    // 举报无效，帖子保持有效，保持reportCount &gt; 0
+<span class="nc" id="L887">                    report.setState(Report.State.INVALID);</span>
+                    // 帖子状态保持VALID不变，reportCount &gt; 0表示被举报过
+<span class="nc" id="L889">                    reportRepository.save(report);</span>
+                }
+            }
+
+<span class="nc" id="L893">            long asyncEndTime = System.currentTimeMillis();</span>
+<span class="nc" id="L894">            System.out.println(&quot;=== 异步处理完成，总耗时: &quot; + (asyncEndTime - asyncStartTime) + &quot;ms ===&quot;);</span>
+
+<span class="nc" id="L896">        } catch (Exception e) {</span>
+<span class="nc" id="L897">            System.err.println(&quot;异步处理Post举报并自动审核时发生异常: &quot;+e.getMessage());</span>
+<span class="nc" id="L898">            e.printStackTrace();</span>
+            // 发生异常时，将举报和帖子状态都设置为等待人工审核
+            try {
+<span class="nc" id="L901">                report.setState(Report.State.WAITING);</span>
+<span class="nc" id="L902">                post.setState(PostState.WAITING);</span>
+                // 保持reportCount &gt; 0，表示这是被举报的帖子
+<span class="nc" id="L904">                reportRepository.save(report);</span>
+<span class="nc" id="L905">                postRepository.save(post);</span>
+<span class="nc" id="L906">                System.out.println(&quot;异常处理完成，举报和帖子状态已设置为等待人工审核&quot;);</span>
+<span class="nc" id="L907">            } catch (Exception saveException) {</span>
+<span class="nc" id="L908">                System.err.println(&quot;保存状态时发生异常: &quot;+saveException.getMessage());</span>
+<span class="nc" id="L909">            }</span>
+<span class="nc" id="L910">        }</span>
+<span class="nc" id="L911">    }</span>
+
+    @Override
+    public Page&lt;ReportedPostResponse&gt; getReportedPosts(Pageable pageable) {
+        // 只返回被举报的帖子（举报次数大于0且未删除）
+<span class="fc" id="L916">        return postRepository.findByIsDeletedFalseAndReportCountGreaterThanOrderByReportCountDesc(0, pageable)</span>
+<span class="fc" id="L917">            .map(this::convertToReportedPostResponse);</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void ignorePostReports(Long postId) {
+<span class="fc" id="L924">        Post post = postRepository.findById(postId)</span>
+<span class="pc" id="L925">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 检查帖子是否已被软删除
+<span class="pc bpc" id="L928" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="nc" id="L929">            throw new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId);</span>
+        }
+        
+        // 删除所有举报记录
+<span class="fc" id="L933">        reportRepository.deleteByPostId(postId);</span>
+        
+        // 重置帖子的举报次数为0
+<span class="fc" id="L936">        post.setReportCount(0);</span>
+<span class="fc" id="L937">        postRepository.save(post);</span>
+<span class="fc" id="L938">    }</span>
+
+    @Override
+    public Integer getTotalReportedPostsCount() {
+<span class="nc" id="L942">        return postRepository.countByIsDeletedFalseAndReportCountGreaterThan(0);</span>
+    }
+    
+    // ================== 区分删除原因的查询方法 ==================
+    
+    @Override
+    public Page&lt;PostResponse&gt; getReportedDeletedPosts(Pageable pageable) {
+<span class="fc" id="L949">        Page&lt;Post&gt; postsPage = postRepository.findReportedDeletedPosts(pageable);</span>
+<span class="pc" id="L950">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+    
+    @Override
+    public Page&lt;PostResponse&gt; getAuditDeletedPosts(Pageable pageable) {
+<span class="nc" id="L955">        Page&lt;Post&gt; postsPage = postRepository.findAuditDeletedPosts(pageable);</span>
+<span class="nc" id="L956">        return postsPage.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+    
+    @Override
+    public Integer getReportedDeletedPostsCount() {
+<span class="fc" id="L961">        return postRepository.countReportedDeletedPosts();</span>
+    }
+    
+    @Override
+    public Integer getAuditDeletedPostsCount() {
+<span class="fc" id="L966">        return postRepository.countAuditDeletedPosts();</span>
+    }
+    
+    // ================== 新增软删除相关方法 ==================
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = {&quot;posts&quot;, &quot;statistics&quot;}, allEntries = true)
+    public void restorePost(Long postId) {
+<span class="fc" id="L975">        Post post = postRepository.findById(postId)</span>
+<span class="fc" id="L976">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Post&quot;, &quot;id&quot;, postId));</span>
+        
+        // 检查帖子状态是否为INVALID
+<span class="fc bfc" id="L979" title="All 2 branches covered.">        if (post.getState() != PostState.INVALID) {</span>
+<span class="fc" id="L980">            throw new RuntimeException(&quot;只有INVALID状态的帖子才能被恢复&quot;);</span>
+        }
+        
+        // 从INVALID状态恢复为VALID状态
+<span class="fc" id="L984">        post.setState(PostState.VALID);</span>
+        
+        // 如果帖子被软删除了，也要恢复软删除状态
+<span class="pc bpc" id="L987" title="1 of 2 branches missed.">        if (post.getIsDeleted()) {</span>
+<span class="fc" id="L988">        post.setIsDeleted(false);</span>
+<span class="fc" id="L989">        post.setDeletedAt(null);</span>
+<span class="fc" id="L990">        post.setDeletedBy(null);</span>
+<span class="fc" id="L991">        post.setDeleteReason(null);</span>
+        }
+        
+<span class="fc" id="L994">        postRepository.save(post);</span>
+<span class="fc" id="L995">    }</span>
+    
+    @Override
+    public Page&lt;PostResponse&gt; getDeletedPostsByUser(Long userId, Pageable pageable) {
+        // 先获取所有已删除的帖子，然后按用户过滤
+<span class="fc" id="L1000">        Page&lt;Post&gt; allDeletedPosts = postRepository.findDeletedPosts(pageable);</span>
+<span class="fc" id="L1001">        List&lt;Post&gt; userDeletedPosts = allDeletedPosts.getContent().stream()</span>
+<span class="fc" id="L1002">            .filter(post -&gt; userId.equals(post.getAuthor().getId()))</span>
+<span class="fc" id="L1003">            .collect(Collectors.toList());</span>
+        
+<span class="fc" id="L1005">        Page&lt;Post&gt; posts = new org.springframework.data.domain.PageImpl&lt;&gt;(userDeletedPosts, pageable, userDeletedPosts.size());</span>
+<span class="pc" id="L1006">        return posts.map(post -&gt; postConverter.toResponse(post, false));</span>
+    }
+
+    // 私有方法：优化PostResponse分页查询，避免N+1查询问题
+    private Page&lt;PostResponse&gt; optimizePostResponsePage(Page&lt;Post&gt; postsPage, Long currentUserId) {
+<span class="fc" id="L1011">        List&lt;Post&gt; posts = postsPage.getContent();</span>
+        
+        // 批量查询用户信息，避免N+1查询
+<span class="fc" id="L1014">        optimizeUserInfoLoading(posts);</span>
+        
+        // 批量查询点赞状态
+<span class="fc" id="L1017">        Map&lt;Long, Boolean&gt; likeStatusMap = batchQueryLikeStatus(posts, currentUserId);</span>
+        
+<span class="fc" id="L1019">        return postsPage.map(post -&gt; postConverter.toResponse(post, </span>
+<span class="fc" id="L1020">            likeStatusMap.getOrDefault(post.getId(), false)));</span>
+    }
+    
+    /**
+     * 优化用户信息加载，避免N+1查询问题
+     * 使用批量查询并手动组装的方式
+     */
+    private void optimizeUserInfoLoading(List&lt;Post&gt; posts) {
+<span class="pc bpc" id="L1028" title="1 of 4 branches missed.">        if (posts == null || posts.isEmpty()) {</span>
+<span class="fc" id="L1029">            return;</span>
+        }
+        
+        // 1. 收集所有作者ID
+<span class="fc" id="L1033">        Set&lt;Long&gt; authorIds = posts.stream()</span>
+<span class="fc" id="L1034">            .map(post -&gt; post.getAuthor().getId())</span>
+<span class="fc" id="L1035">            .collect(Collectors.toSet());</span>
+        
+        // 2. 一次性查询所有用户
+<span class="fc" id="L1038">        Map&lt;Long, User&gt; userMap = userService.findByIds(authorIds)</span>
+<span class="fc" id="L1039">            .stream()</span>
+<span class="fc" id="L1040">            .collect(Collectors.toMap(User::getId, user -&gt; user));</span>
+        
+        // 3. 手动组装，将完整的User对象设置到Post中
+<span class="fc bfc" id="L1043" title="All 2 branches covered.">        for (Post post : posts) {</span>
+<span class="fc" id="L1044">            User author = post.getAuthor();</span>
+<span class="pc bpc" id="L1045" title="2 of 4 branches missed.">            if (author != null &amp;&amp; author.getId() != null) {</span>
+<span class="fc" id="L1046">                User completeUser = userMap.get(author.getId());</span>
+<span class="pc bpc" id="L1047" title="1 of 2 branches missed.">                if (completeUser != null) {</span>
+                    // 直接设置完整的用户对象，避免后续的惰性加载
+<span class="fc" id="L1049">                    post.setAuthor(completeUser);</span>
+                }
+            }
+<span class="fc" id="L1052">        }</span>
+<span class="fc" id="L1053">    }</span>
+    
+    /**
+     * 批量查询点赞状态，避免N+1查询
+     */
+    private Map&lt;Long, Boolean&gt; batchQueryLikeStatus(List&lt;Post&gt; posts, Long currentUserId) {
+<span class="fc" id="L1059">        Map&lt;Long, Boolean&gt; likeStatusMap = new HashMap&lt;&gt;();</span>
+        
+<span class="pc bpc" id="L1061" title="1 of 4 branches missed.">        if (currentUserId != null &amp;&amp; !posts.isEmpty()) {</span>
+<span class="fc" id="L1062">            List&lt;Long&gt; postIds = posts.stream().map(Post::getId).collect(Collectors.toList());</span>
+<span class="fc" id="L1063">            List&lt;PostLike&gt; userLikes = postLikeRepository.findByUserIdAndPostIdIn(currentUserId, postIds);</span>
+<span class="fc" id="L1064">            Set&lt;Long&gt; likedPostIds = userLikes.stream()</span>
+<span class="pc" id="L1065">                .map(like -&gt; like.getPost().getId())</span>
+<span class="fc" id="L1066">                .collect(Collectors.toSet());</span>
+            
+<span class="fc bfc" id="L1068" title="All 2 branches covered.">            for (Long postId : postIds) {</span>
+<span class="fc" id="L1069">                likeStatusMap.put(postId, likedPostIds.contains(postId));</span>
+<span class="fc" id="L1070">            }</span>
+        }
+        
+<span class="fc" id="L1073">        return likeStatusMap;</span>
+    }
+
+    // 私有方法：转换为ReportedPostResponse
+    private ReportedPostResponse convertToReportedPostResponse(Post post) {
+<span class="nc" id="L1078">        ReportedPostResponse response = new ReportedPostResponse();</span>
+        
+        // 设置帖子基本信息（精简版）
+<span class="nc" id="L1081">        response.setId(post.getId());</span>
+<span class="nc" id="L1082">        response.setTitle(post.getTitle());</span>
+<span class="nc" id="L1083">        response.setContent(post.getContent());</span>
+<span class="nc" id="L1084">        response.setMood(post.getMood());</span>
+<span class="nc" id="L1085">        response.setCreatedAt(post.getCreatedAt());</span>
+<span class="nc" id="L1086">        response.setState(post.getState());</span>
+        
+        // 设置作者信息（精简版）
+<span class="nc" id="L1089">        response.setAuthorName(post.getAuthor().getUsername());</span>
+<span class="nc" id="L1090">        response.setAuthorId(post.getAuthor().getId());</span>
+        
+        // 设置举报核心信息
+<span class="nc" id="L1093">        response.setReportCount(post.getReportCount());</span>
+        
+        // 获取该帖子的所有举报记录
+<span class="nc" id="L1096">        List&lt;Report&gt; reports = reportRepository.findByPostOrderByCreatedAtDesc(post);</span>
+        
+<span class="nc bnc" id="L1098" title="All 2 branches missed.">        if (!reports.isEmpty()) {</span>
+            // 设置最近一次举报时间
+<span class="nc" id="L1100">            response.setLastReportTime(reports.get(0).getCreatedAt());</span>
+            // 收集所有举报原因
+<span class="nc" id="L1102">            List&lt;String&gt; reasons = reports.stream()</span>
+<span class="nc" id="L1103">                .map(Report::getReason)</span>
+<span class="nc" id="L1104">                .distinct() // 去重</span>
+<span class="nc" id="L1105">                .collect(Collectors.toList());</span>
+<span class="nc" id="L1106">            response.setReportReasons(reasons);</span>
+        }
+        
+<span class="nc" id="L1109">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

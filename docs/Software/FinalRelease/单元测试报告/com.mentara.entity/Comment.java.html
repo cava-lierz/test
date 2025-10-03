@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Comment.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">Comment.java</span></div><h1>Comment.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+@Entity
+<span class="pc bnc" id="L17" title="All 90 branches missed.">@Data</span>
+@Table(name = &quot;comments&quot;, indexes = {
+    @Index(name = &quot;idx_comments_post_parent_created&quot;, columnList = &quot;post_id, parent_id, created_at ASC&quot;),
+    @Index(name = &quot;idx_comments_top_comment_created&quot;, columnList = &quot;top_comment_id, created_at ASC&quot;),
+})
+public class Comment {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="fc" id="L25">    private Long id;</span>
+
+    @NotBlank(message = &quot;评论内容不能为空&quot;)
+    @Column(columnDefinition = &quot;TEXT&quot;)
+<span class="fc" id="L29">    private String content;</span>
+
+    @Column(name = &quot;created_at&quot;)
+<span class="fc" id="L32">    private LocalDateTime createdAt;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;author_id&quot;)
+    @JsonIgnore
+<span class="fc" id="L37">    private User author;</span>
+    
+
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;post_id&quot;)
+    @JsonIgnore
+<span class="fc" id="L44">    private Post post;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;parent_id&quot;)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @JsonIgnore
+<span class="fc" id="L51">    private Comment parent;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;top_comment_id&quot;)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @JsonIgnore
+<span class="fc" id="L58">    private Comment topComment;</span>
+
+<span class="fc" id="L60">    @Column(name = &quot;replys_count&quot;)</span>
+<span class="fc" id="L61">    private int replysCount = 0;</span>
+
+    // 移除关联关系，避免循环查询
+    // 回复关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;parent&quot;, fetch = FetchType.LAZY)
+    // @ToString.Exclude
+    // @EqualsAndHashCode.Exclude
+    // @JsonIgnore
+    // private Set&lt;Comment&gt; replies = new HashSet&lt;&gt;();
+
+<span class="fc" id="L71">    @Column(name = &quot;likes_count&quot;)</span>
+<span class="fc" id="L72">    private int likesCount = 0;</span>
+
+    // 移除关联关系，避免循环查询
+    // 点赞关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;comment&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;CommentLike&gt; likes;
+
+    // 移除关联关系，避免循环查询
+    // 通知关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;comment&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;CommentLikeNotification&gt; commentLikeNotifications;
+
+    // @OneToMany(mappedBy = &quot;comment&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;CommentReplyNotification&gt; commentReplyNotifications;
+
+    // @OneToMany(mappedBy = &quot;reply&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;PostReplyNotification&gt; asReplyPostNotifications;
+
+    // @OneToMany(mappedBy = &quot;reply&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;CommentReplyNotification&gt; asReplyCommentNotifications;
+
+<span class="fc" id="L98">    @Column(name = &quot;report_count&quot;, nullable = false)</span>
+<span class="fc" id="L99">    private Integer reportCount = 0;</span>
+
+<span class="fc" id="L101">    @Column(name = &quot;is_deleted&quot;, nullable = false)</span>
+<span class="fc" id="L102">    private Boolean isDeleted = false;</span>
+
+    @Column(name = &quot;deleted_at&quot;)
+<span class="fc" id="L105">    private LocalDateTime deletedAt;</span>
+
+    @Column(name = &quot;deleted_by&quot;)
+<span class="fc" id="L108">    private Long deletedBy; // 删除操作的用户ID</span>
+
+    @Column(name = &quot;delete_reason&quot;)
+<span class="fc" id="L111">    private String deleteReason; // 删除原因</span>
+
+    // 移除关联关系，避免循环查询
+    // 举报关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;comment&quot;, cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;CommentReport&gt; reports;
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L121">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L122">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

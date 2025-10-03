@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatRoomServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">ChatRoomServiceImpl.java</span></div><h1>ChatRoomServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.request.ChatRoomRequest;
+import com.mentara.dto.response.ChatRoomResponse;
+import com.mentara.entity.ChatRoom;
+import com.mentara.enums.ChatRoomType;
+import com.mentara.repository.ChatRoomRepository;
+import com.mentara.service.ChatRoomService;
+import com.mentara.service.ChatRoomUserService;
+import com.mentara.dto.request.ChatRoomUserRequest;
+import com.mentara.entity.User;
+import com.mentara.repository.UserRepository;
+import com.mentara.util.AvatarUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L23">public class ChatRoomServiceImpl implements ChatRoomService {</span>
+    @Autowired
+    private ChatRoomRepository chatRoomRepository;
+    @Autowired
+    private ChatRoomUserService chatRoomUserService;
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    public ChatRoomResponse createRoom(ChatRoomRequest request, Long creatorUserId) {
+<span class="fc" id="L33">        ChatRoom room = new ChatRoom();</span>
+<span class="fc" id="L34">        room.setName(request.getName());</span>
+<span class="fc" id="L35">        room.setDescription(request.getDescription());</span>
+<span class="fc" id="L36">        room.setType(request.getType());</span>
+<span class="fc" id="L37">        ChatRoom saved = chatRoomRepository.save(room);</span>
+        // 创建者自动加入房间
+<span class="fc" id="L39">        User creator = userRepository.findById(creatorUserId)</span>
+<span class="pc" id="L40">                .orElseThrow(() -&gt; new RuntimeException(&quot;Creator user not found&quot;));</span>
+        
+<span class="fc" id="L42">        ChatRoomUserRequest joinReq = new ChatRoomUserRequest();</span>
+<span class="fc" id="L43">        joinReq.setChatRoomId(saved.getId());</span>
+<span class="fc" id="L44">        joinReq.setUserId(creatorUserId);</span>
+        
+        // 根据聊天室类型设置默认昵称和头像
+<span class="pc bpc" id="L47" title="1 of 2 branches missed.">        if (request.getType().name().equals(&quot;ANONYMOUS&quot;)) {</span>
+            // 匿名聊天室：使用默认匿名信息
+<span class="nc" id="L49">            joinReq.setDisplayNickname(&quot;&quot;);  // 空字符串，让toResponse方法生成默认匿名昵称</span>
+            //joinReq.setDisplayAvatar(&quot;&quot;);    // 空字符串，让toResponse方法使用默认头像
+            // 匿名聊天室：为创建者分配随机默认头像
+<span class="nc" id="L52">            String uniqueKey = saved.getId() + &quot;_&quot; + creatorUserId;</span>
+<span class="nc" id="L53">            joinReq.setDisplayAvatar(AvatarUtils.generateRandomDefaultAvatar(uniqueKey));</span>
+<span class="nc" id="L54">        } else {</span>
+            // 实名聊天室：使用创建者真实信息
+<span class="fc" id="L56">            joinReq.setDisplayNickname(creator.getNickname());</span>
+<span class="fc" id="L57">            joinReq.setDisplayAvatar(creator.getAvatar());</span>
+        }
+        
+<span class="fc" id="L60">        chatRoomUserService.addUserToRoom(joinReq);</span>
+<span class="fc" id="L61">        return toResponse(saved);</span>
+    }
+
+    @Override
+    public List&lt;ChatRoomResponse&gt; getAllRooms() {
+        // 只返回非私聊的聊天室（REALNAME 和 ANONYMOUS）
+<span class="fc" id="L67">        return chatRoomRepository.findByIsDeletedFalse().stream()</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">                .filter(room -&gt; room.getType() != ChatRoomType.PRIVATE)</span>
+<span class="fc" id="L69">                .map(this::toResponse)</span>
+<span class="fc" id="L70">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public ChatRoomResponse getRoomById(Long id) {
+<span class="fc" id="L75">        ChatRoom room = chatRoomRepository.findByIdAndIsDeletedFalse(id)</span>
+<span class="fc" id="L76">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found&quot;));</span>
+<span class="fc" id="L77">        return toResponse(room);</span>
+    }
+
+    @Override
+    @Transactional
+    public void deleteRoom(Long roomId) {
+<span class="fc" id="L83">        ChatRoom room = chatRoomRepository.findById(roomId)</span>
+<span class="fc" id="L84">                .orElseThrow(() -&gt; new RuntimeException(&quot;ChatRoom not found&quot;));</span>
+        
+        // 软删除聊天室
+<span class="fc" id="L87">        room.setIsDeleted(true);</span>
+<span class="fc" id="L88">        room.setDeletedAt(LocalDateTime.now());</span>
+<span class="fc" id="L89">        chatRoomRepository.save(room);</span>
+<span class="fc" id="L90">    }</span>
+
+    private ChatRoomResponse toResponse(ChatRoom room) {
+<span class="fc" id="L93">        ChatRoomResponse resp = new ChatRoomResponse();</span>
+<span class="fc" id="L94">        resp.setId(room.getId());</span>
+<span class="fc" id="L95">        resp.setName(room.getName());</span>
+<span class="fc" id="L96">        resp.setDescription(room.getDescription());</span>
+<span class="fc" id="L97">        resp.setType(room.getType());</span>
+<span class="fc" id="L98">        resp.setCreatedAt(room.getCreatedAt());</span>
+<span class="fc" id="L99">        return resp;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

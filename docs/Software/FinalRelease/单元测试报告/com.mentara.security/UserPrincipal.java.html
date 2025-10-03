@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserPrincipal.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.security</a> &gt; <span class="el_source">UserPrincipal.java</span></div><h1>UserPrincipal.java</h1><pre class="source lang-java linenums">package com.mentara.security;
+
+import com.mentara.entity.User;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+public class UserPrincipal implements UserDetails {
+    private Long id;
+    private String username;
+    private String email;
+    private String password;
+    private boolean enabled;
+    private Collection&lt;? extends GrantedAuthority&gt; authorities;
+
+<span class="fc" id="L20">    public UserPrincipal(Long id, String username, String email, String password, boolean enabled, Collection&lt;? extends GrantedAuthority&gt; authorities) {</span>
+<span class="fc" id="L21">        this.id = id;</span>
+<span class="fc" id="L22">        this.username = username;</span>
+<span class="fc" id="L23">        this.email = email;</span>
+<span class="fc" id="L24">        this.password = password;</span>
+<span class="fc" id="L25">        this.enabled = enabled;</span>
+<span class="fc" id="L26">        this.authorities = authorities;</span>
+<span class="fc" id="L27">    }</span>
+
+    public static UserPrincipal create(User user) {
+<span class="fc bfc" id="L30" title="All 2 branches covered.">        if (user.getUserAuth() == null) {</span>
+<span class="fc" id="L31">            throw new RuntimeException(&quot;User authentication data is missing for user: &quot; + user.getUsername());</span>
+        }
+        
+<span class="fc" id="L34">        List&lt;GrantedAuthority&gt; authorities = List.of(</span>
+<span class="fc" id="L35">            new SimpleGrantedAuthority(&quot;ROLE_&quot; + user.getRole().name())</span>
+        );
+        
+        // 用户未被禁用才能启用账户
+<span class="pc bpc" id="L39" title="2 of 4 branches missed.">        boolean enabled = user.getIsDisabled() == null || !user.getIsDisabled();</span>
+        
+<span class="fc" id="L41">        return new UserPrincipal(</span>
+<span class="fc" id="L42">                user.getId(),</span>
+<span class="fc" id="L43">                user.getUsername(),</span>
+<span class="fc" id="L44">                user.getUserAuth().getEmail(),</span>
+<span class="fc" id="L45">                user.getUserAuth().getPassword(),</span>
+                enabled,
+                authorities
+        );
+    }
+
+    public Long getId() {
+<span class="fc" id="L52">        return id;</span>
+    }
+
+    public String getEmail() {
+<span class="nc" id="L56">        return email;</span>
+    }
+
+    @Override
+    public String getUsername() {
+<span class="fc" id="L61">        return username;</span>
+    }
+
+    @Override
+    public String getPassword() {
+<span class="fc" id="L66">        return password;</span>
+    }
+
+    @Override
+    public Collection&lt;? extends GrantedAuthority&gt; getAuthorities() {
+<span class="fc" id="L71">        return authorities;</span>
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+<span class="nc" id="L76">        return true;</span>
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+<span class="nc" id="L81">        return true;</span>
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+<span class="nc" id="L86">        return true;</span>
+    }
+
+    @Override
+    public boolean isEnabled() {
+<span class="nc" id="L91">        return enabled;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

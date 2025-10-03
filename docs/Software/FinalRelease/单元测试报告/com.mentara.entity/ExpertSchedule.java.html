@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExpertSchedule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">ExpertSchedule.java</span></div><h1>ExpertSchedule.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Arrays;
+
+/**
+ * 专家预约时间表实体 - 重新设计使用绝对日期存储
+ */
+@Entity
+@Getter
+<span class="pc" id="L16">@Setter</span>
+@Table(name = &quot;expert_schedules&quot;)
+<span class="fc" id="L18">public class ExpertSchedule {</span>
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="fc" id="L21">    private Long id;</span>
+
+    /** 关联专家 */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;expert_id&quot;, nullable = false, unique = true)
+<span class="nc" id="L26">    private Expert expert;</span>
+
+    /**
+     * 每个日期对应8个时段的状态
+     * 时段为：08:00、09:00、10:00、11:00、14:00、15:00、16:00、17:00
+     * （中午12:00-14:00为休息时间，不开放预约）
+     * 
+     * 状态码：
+     * 0 = 空闲（可预约）
+     * 1 = 用户预约（已被预约）
+     * 2 = 专家设置不可预约
+     * 
+     * 存储格式：序列化为JSON字符串
+     * 格式: {&quot;2024-01-15&quot;:&quot;0,0,2,0,0,0,2,0&quot;,&quot;2024-01-16&quot;:&quot;0,1,0,0,0,0,0,0&quot;,...}
+     */
+<span class="fc" id="L41">    @Lob</span>
+    @Column(nullable = false, length = 4096)
+<span class="fc" id="L43">    private String scheduleJson = &quot;{}&quot;;</span>
+
+    /** 内存中的日期到时段状态映射 */
+<span class="fc" id="L46">    @Transient</span>
+<span class="nc" id="L47">    private Map&lt;LocalDate, int[]&gt; dateToSlots = new HashMap&lt;&gt;();</span>
+
+    @PostLoad
+    protected void loadSchedule() {
+        // 反序列化scheduleJson为dateToSlots
+        try {
+<span class="pc bpc" id="L53" title="2 of 6 branches missed.">            if (scheduleJson == null || scheduleJson.trim().equals(&quot;{}&quot;) || scheduleJson.trim().isEmpty()) {</span>
+<span class="fc" id="L54">                dateToSlots = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L55">                return;</span>
+            }
+            
+            // 简单解析JSON格式的字符串
+<span class="fc" id="L59">            String content = scheduleJson.substring(1, scheduleJson.length() - 1); // 移除大括号</span>
+            
+            // 如果内容为空，直接返回
+<span class="pc bpc" id="L62" title="1 of 2 branches missed.">            if (content.trim().isEmpty()) {</span>
+<span class="nc" id="L63">                dateToSlots = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L64">                return;</span>
+            }
+            
+<span class="fc" id="L67">            String[] entries = content.split(&quot;\&quot;,\&quot;&quot;);</span>
+            
+<span class="fc bfc" id="L69" title="All 2 branches covered.">            for (String entry : entries) {</span>
+<span class="fc" id="L70">                String[] parts = entry.split(&quot;\&quot;:\&quot;&quot;);</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">                if (parts.length == 2) {</span>
+<span class="fc" id="L72">                    String dateStr = parts[0].replace(&quot;\&quot;&quot;, &quot;&quot;);</span>
+<span class="fc" id="L73">                    String slotsStr = parts[1].replace(&quot;\&quot;&quot;, &quot;&quot;);</span>
+                    
+<span class="fc" id="L75">                    LocalDate date = LocalDate.parse(dateStr);</span>
+<span class="fc" id="L76">                    String[] slotValues = slotsStr.split(&quot;,&quot;);</span>
+<span class="fc" id="L77">                    int[] slots = new int[8];</span>
+                    
+<span class="pc bpc" id="L79" title="1 of 4 branches missed.">                    for (int i = 0; i &lt; 8 &amp;&amp; i &lt; slotValues.length; i++) {</span>
+                        try {
+<span class="fc" id="L81">                            slots[i] = Integer.parseInt(slotValues[i]);</span>
+                            // 验证状态值范围
+<span class="pc bpc" id="L83" title="2 of 4 branches missed.">                            if (slots[i] &lt; 0 || slots[i] &gt; 2) {</span>
+<span class="nc" id="L84">                                slots[i] = 0; // 默认为空闲</span>
+                            }
+<span class="nc" id="L86">                        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L87">                            slots[i] = 0; // 默认为空闲</span>
+<span class="fc" id="L88">                        }</span>
+                    }
+                    
+<span class="fc" id="L91">                    dateToSlots.put(date, slots);</span>
+                }
+            }
+<span class="nc" id="L94">        } catch (Exception e) {</span>
+            // 解析失败，初始化为空
+<span class="nc" id="L96">            dateToSlots = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L97">        }</span>
+<span class="fc" id="L98">    }</span>
+
+    @PrePersist
+    @PreUpdate
+    private void saveSchedule() {
+        // 序列化dateToSlots为scheduleJson
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">        if (dateToSlots.isEmpty()) {</span>
+<span class="nc" id="L105">            scheduleJson = &quot;{}&quot;;</span>
+<span class="nc" id="L106">            return;</span>
+        }
+        
+<span class="fc" id="L109">        StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L110">        sb.append(&quot;{&quot;);</span>
+<span class="fc" id="L111">        boolean first = true;</span>
+        
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        for (Map.Entry&lt;LocalDate, int[]&gt; entry : dateToSlots.entrySet()) {</span>
+<span class="fc bfc" id="L114" title="All 2 branches covered.">            if (!first) {</span>
+<span class="fc" id="L115">                sb.append(&quot;,&quot;);</span>
+            }
+<span class="fc" id="L117">            first = false;</span>
+            
+<span class="fc" id="L119">            sb.append(&quot;\&quot;&quot;).append(entry.getKey().toString()).append(&quot;\&quot;:\&quot;&quot;);</span>
+<span class="fc" id="L120">            int[] slots = entry.getValue();</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">            for (int i = 0; i &lt; 8; i++) {</span>
+<span class="fc" id="L122">                sb.append(slots[i]);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">                if (i &lt; 7) sb.append(&quot;,&quot;);</span>
+            }
+<span class="fc" id="L125">            sb.append(&quot;\&quot;&quot;);</span>
+<span class="fc" id="L126">        }</span>
+        
+<span class="fc" id="L128">        sb.append(&quot;}&quot;);</span>
+<span class="fc" id="L129">        scheduleJson = sb.toString();</span>
+<span class="fc" id="L130">    }</span>
+
+    /**
+     * 获取指定日期的时段状态
+     */
+    public int[] getSlotsForDate(LocalDate date) {
+<span class="fc" id="L136">        return dateToSlots.getOrDefault(date, getDefaultSlots());</span>
+    }
+
+    /**
+     * 设置指定日期的时段状态
+     */
+    public void setSlotsForDate(LocalDate date, int[] slots) {
+<span class="fc" id="L143">        dateToSlots.put(date, Arrays.copyOf(slots, 8));</span>
+<span class="fc" id="L144">    }</span>
+
+    /**
+     * 设置指定日期和时段的状态
+     * @param date 日期
+     * @param slotIndex 时段索引 (0-7)
+     * @param status 状态 (0=空闲, 1=已预约, 2=专家不可用)
+     */
+    public void setSlotStatus(LocalDate date, int slotIndex, int status) {
+<span class="fc" id="L153">        int[] slots = getSlotsForDate(date);</span>
+<span class="pc bpc" id="L154" title="4 of 8 branches missed.">        if (slotIndex &gt;= 0 &amp;&amp; slotIndex &lt; 8 &amp;&amp; status &gt;= 0 &amp;&amp; status &lt;= 2) {</span>
+<span class="fc" id="L155">            slots[slotIndex] = status;</span>
+<span class="fc" id="L156">            setSlotsForDate(date, slots);</span>
+        }
+<span class="fc" id="L158">    }</span>
+
+    /**
+     * 获取指定日期和时段的状态
+     */
+    public int getSlotStatus(LocalDate date, int slotIndex) {
+<span class="fc" id="L164">        int[] slots = getSlotsForDate(date);</span>
+<span class="pc bpc" id="L165" title="2 of 4 branches missed.">        if (slotIndex &gt;= 0 &amp;&amp; slotIndex &lt; 8) {</span>
+<span class="fc" id="L166">            return slots[slotIndex];</span>
+        }
+<span class="nc" id="L168">        return 0; // 默认空闲</span>
+    }
+
+    /**
+     * 检查指定时段是否可预约 (状态为0)
+     */
+    public boolean isSlotAvailable(LocalDate date, int slotIndex) {
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">        return getSlotStatus(date, slotIndex) == 0;</span>
+    }
+
+    /**
+     * 设置专家排班偏好 (在状态0和2之间切换)
+     */
+    public void setExpertAvailability(LocalDate date, int slotIndex, boolean available) {
+<span class="fc" id="L182">        int currentStatus = getSlotStatus(date, slotIndex);</span>
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">        if (currentStatus != 1) { // 不能修改已预约的时段</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">            setSlotStatus(date, slotIndex, available ? 0 : 2);</span>
+        }
+<span class="fc" id="L186">    }</span>
+
+    /**
+     * 预约时段 (将状态从0改为1)
+     */
+    public boolean bookSlot(LocalDate date, int slotIndex) {
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">        if (isSlotAvailable(date, slotIndex)) {</span>
+<span class="fc" id="L193">            setSlotStatus(date, slotIndex, 1);</span>
+<span class="fc" id="L194">            return true;</span>
+        }
+<span class="nc" id="L196">        return false;</span>
+    }
+
+    /**
+     * 取消预约 (将状态从1改为0)
+     */
+    public boolean cancelBooking(LocalDate date, int slotIndex) {
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (getSlotStatus(date, slotIndex) == 1) {</span>
+<span class="fc" id="L204">            setSlotStatus(date, slotIndex, 0);</span>
+<span class="fc" id="L205">            return true;</span>
+        }
+<span class="nc" id="L207">        return false;</span>
+    }
+
+    /**
+     * 获取默认时段（全部空闲）
+     */
+    private int[] getDefaultSlots() {
+<span class="fc" id="L214">        int[] slots = new int[8];</span>
+<span class="fc" id="L215">        Arrays.fill(slots, 0); // 默认全部空闲</span>
+<span class="fc" id="L216">        return slots;</span>
+    }
+
+    /**
+     * 清理过期数据（清理指定日期之前的数据）
+     */
+    public void cleanupOldData(LocalDate beforeDate) {
+<span class="fc" id="L223">        dateToSlots.entrySet().removeIf(entry -&gt; entry.getKey().isBefore(beforeDate));</span>
+<span class="fc" id="L224">    }</span>
+
+    /**
+     * 确保未来N天有默认排班数据
+     */
+    public void ensureFutureDays(int days) {
+<span class="fc" id="L230">        LocalDate today = LocalDate.now();</span>
+<span class="fc bfc" id="L231" title="All 2 branches covered.">        for (int i = 0; i &lt; days; i++) {</span>
+<span class="fc" id="L232">            LocalDate date = today.plusDays(i);</span>
+<span class="fc bfc" id="L233" title="All 2 branches covered.">            if (!dateToSlots.containsKey(date)) {</span>
+<span class="fc" id="L234">                setSlotsForDate(date, getDefaultSlots());</span>
+            }
+        }
+<span class="fc" id="L237">    }</span>
+
+    /**
+     * 测试专用方法：手动触发序列化
+     */
+    public void triggerSerialization() {
+<span class="fc" id="L243">        saveSchedule();</span>
+<span class="fc" id="L244">    }</span>
+
+    /**
+     * 测试专用方法：手动触发反序列化
+     */
+    public void triggerDeserialization() {
+<span class="fc" id="L250">        loadSchedule();</span>
+<span class="fc" id="L251">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

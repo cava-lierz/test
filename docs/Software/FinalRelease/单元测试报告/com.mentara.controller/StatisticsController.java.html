@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StatisticsController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">StatisticsController.java</span></div><h1>StatisticsController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.response.StatisticsResponse;
+import com.mentara.service.StatisticsService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping(&quot;/statistics&quot;)
+<span class="fc" id="L10">public class StatisticsController {</span>
+
+    @Autowired
+    private StatisticsService statisticsService;
+
+    /**
+     * 获取指定周的统计数据
+     * @param year 年份
+     * @param week 周数（1-53）
+     * @return 统计数据
+     */
+    @GetMapping(&quot;/weekly&quot;)
+    public StatisticsResponse getWeeklyStatistics(
+            @RequestParam int year,
+            @RequestParam int week) {
+<span class="fc" id="L25">        return statisticsService.getWeeklyStatistics(year, week);</span>
+    }
+
+    /**
+     * 获取指定月份的统计数据
+     * @param year 年份
+     * @param month 月份（1-12）
+     * @return 统计数据
+     */
+    @GetMapping(&quot;/monthly&quot;)
+    public StatisticsResponse getMonthlyStatistics(
+            @RequestParam int year,
+            @RequestParam int month) {
+<span class="fc" id="L38">        return statisticsService.getMonthlyStatistics(year, month);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CheckinServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">CheckinServiceImpl.java</span></div><h1>CheckinServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.entity.Checkin;
+import com.mentara.entity.User;
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.dto.request.CheckinRequest;
+import com.mentara.dto.response.CheckinResponse;
+import com.mentara.converter.CheckinConverter;
+import com.mentara.repository.CheckinRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.CheckinService;
+import com.mentara.service.MoodScoreService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L27">public class CheckinServiceImpl implements CheckinService {</span>
+
+    @Autowired
+    private CheckinRepository checkinRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private CheckinConverter checkinConverter;
+
+    @Autowired
+    private MoodScoreService moodScoreService;
+
+    @Override
+    @Transactional
+    public void createCheckin(CheckinRequest checkinRequest, Long userId) {
+<span class="fc" id="L44">        Checkin checkin = new Checkin();</span>
+<span class="fc" id="L45">        checkin.setRating(checkinRequest.getRating());</span>
+<span class="fc" id="L46">        checkin.setNote(checkinRequest.getNote());</span>
+<span class="fc" id="L47">        checkin.setUser(userRepository.findById(userId)</span>
+<span class="pc" id="L48">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId)));</span>
+<span class="fc" id="L49">        Checkin savedCheckin = checkinRepository.save(checkin);</span>
+
+        // 创建心情评分记录
+<span class="pc bpc" id="L52" title="2 of 4 branches missed.">        if (checkinRequest.getNote() != null &amp;&amp; !checkinRequest.getNote().trim().isEmpty()) {</span>
+            try {
+<span class="fc" id="L54">                moodScoreService.createMoodScoreForCheckin(savedCheckin.getId(), userId, checkinRequest.getNote());</span>
+<span class="nc" id="L55">            } catch (Exception e) {</span>
+                // 记录错误但不影响checkin的创建
+<span class="nc" id="L57">                System.err.println(&quot;创建心情评分记录失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L58">            }</span>
+        }
+<span class="fc" id="L60">    }</span>
+
+    @Override
+    public List&lt;CheckinResponse&gt; getCurrentWeekData(Long userId) {
+<span class="fc" id="L64">        return getWeekDataByDate(userId, LocalDate.now());</span>
+    }
+
+    @Override
+    public List&lt;CheckinResponse&gt; getWeekData(Long userId, int weeksAgo) {
+<span class="fc" id="L69">        LocalDate targetDate = LocalDate.now().minusWeeks(weeksAgo);</span>
+<span class="fc" id="L70">        return getWeekDataByDate(userId, targetDate);</span>
+    }
+
+    @Override
+    public List&lt;CheckinResponse&gt; getWeekDataByDate(Long userId, LocalDate targetDate) {
+<span class="fc" id="L75">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L76">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+        
+<span class="fc" id="L78">        LocalDate monday = targetDate.with(DayOfWeek.MONDAY);</span>
+<span class="fc" id="L79">        LocalDate sunday = targetDate.with(DayOfWeek.SUNDAY);</span>
+
+<span class="fc" id="L81">        List&lt;Checkin&gt; checkins = checkinRepository.findByUserAndCheckinDateBetween(user, monday, sunday);</span>
+        
+<span class="fc" id="L83">        Map&lt;LocalDate, Checkin&gt; checkinMap = checkins.stream()</span>
+<span class="fc" id="L84">            .collect(Collectors.toMap(Checkin::getCheckinDate, Function.identity()));</span>
+
+<span class="fc" id="L86">        List&lt;CheckinResponse&gt; weekData = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        for (LocalDate date = monday; !date.isAfter(sunday); date = date.plusDays(1)) {</span>
+<span class="fc" id="L88">            Checkin checkin = checkinMap.get(date);</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">            if (checkin != null) {</span>
+<span class="nc" id="L90">                weekData.add(checkinConverter.toCheckinResponse(checkin));</span>
+            } else {
+<span class="fc" id="L92">                weekData.add(emptyCheckinResponse(user, date));</span>
+            }
+        }
+<span class="fc" id="L95">        return weekData;</span>
+    }
+
+    @Override
+    public CheckinResponse getTodayData(Long userId) {
+<span class="fc" id="L100">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L101">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+<span class="fc" id="L102">        LocalDate today = LocalDate.now();</span>
+<span class="fc" id="L103">        return checkinRepository.findByUserAndCheckinDate(user, today)</span>
+<span class="fc" id="L104">            .map(checkinConverter::toCheckinResponse)</span>
+<span class="fc" id="L105">            .orElse(</span>
+<span class="fc" id="L106">                emptyCheckinResponse(user, today)</span>
+            );
+    }
+
+    private CheckinResponse emptyCheckinResponse(User user, LocalDate date) {
+<span class="fc" id="L111">        return CheckinResponse.builder()</span>
+<span class="fc" id="L112">            .id(null)</span>
+<span class="fc" id="L113">            .rating(null)</span>
+<span class="fc" id="L114">            .note(null)</span>
+<span class="fc" id="L115">            .checkinDate(date)</span>
+<span class="fc" id="L116">            .weekday(date.getDayOfWeek())</span>
+<span class="fc" id="L117">            .userId(user.getId())</span>
+<span class="fc" id="L118">            .nickname(user.getNickname())</span>
+<span class="fc" id="L119">            .build();</span>
+    }
+
+    @Override
+    public Page&lt;CheckinResponse&gt; getUserCheckins(Long userId, Pageable pageable) {
+        // 验证用户是否存在
+<span class="fc" id="L125">        userRepository.findById(userId)</span>
+<span class="pc" id="L126">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;User&quot;, &quot;id&quot;, userId));</span>
+        
+<span class="fc" id="L128">        Page&lt;Checkin&gt; checkins = checkinRepository.findByUserIdOrderByCheckinDateDesc(userId, pageable);</span>
+<span class="fc" id="L129">        return checkins.map(checkinConverter::toCheckinResponse);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

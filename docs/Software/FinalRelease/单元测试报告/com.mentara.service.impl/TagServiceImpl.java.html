@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TagServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">TagServiceImpl.java</span></div><h1>TagServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+
+import com.mentara.exception.ResourceNotFoundException;
+import com.mentara.entity.PostTag;
+import com.mentara.service.TagService;
+import com.mentara.repository.PostTagRepository;
+import jakarta.annotation.PostConstruct;
+
+@Service
+<span class="fc" id="L17">public class TagServiceImpl implements TagService {</span>
+
+    @Autowired
+    private PostTagRepository postTagRepository;
+
+    @Override
+    @Cacheable(value = &quot;tags&quot;, key = &quot;'all'&quot;)
+    public List&lt;PostTag&gt; findAll() {
+<span class="fc" id="L25">        return postTagRepository.findAll();</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;tags&quot;, key = &quot;#id&quot;)
+    public PostTag findById(Long id) {
+<span class="fc" id="L31">        return postTagRepository.findById(id)</span>
+<span class="fc" id="L32">            .orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Tag&quot;, &quot;id&quot;, id));</span>
+    }
+
+    @Override
+    @PostConstruct
+    public void initTags() {
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        if (postTagRepository.count() == 0) {</span>
+<span class="fc" id="L39">            postTagRepository.saveAll(Arrays.asList(</span>
+                new PostTag(null, &quot;心理健康&quot;, &quot;#4CAF50&quot;),
+                new PostTag(null, &quot;成长&quot;, &quot;#FF9800&quot;),
+                new PostTag(null, &quot;匿名&quot;, &quot;#9E9E9E&quot;),
+                new PostTag(null, &quot;正能量&quot;, &quot;#FFD700&quot;),
+                new PostTag(null, &quot;情感&quot;, &quot;#E91E63&quot;),
+                new PostTag(null, &quot;学习&quot;, &quot;#2196F3&quot;),
+                new PostTag(null, &quot;生活&quot;, &quot;#8BC34A&quot;),
+                new PostTag(null, &quot;压力&quot;, &quot;#F44336&quot;),
+                new PostTag(null, &quot;求助&quot;, &quot;#FF5722&quot;),
+                new PostTag(null, &quot;分享&quot;, &quot;#9C27B0&quot;)
+            ));
+        }
+<span class="fc" id="L52">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

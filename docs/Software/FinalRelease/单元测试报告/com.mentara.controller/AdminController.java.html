@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AdminController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">AdminController.java</span></div><h1>AdminController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.response.AdminStatsResponse;
+import com.mentara.dto.response.UserProfileResponse;
+import com.mentara.dto.response.ReportedPostResponse;
+import com.mentara.dto.response.ReportedCommentResponse;
+import com.mentara.dto.response.ChatRoomResponse;
+import com.mentara.dto.response.PostResponse;
+import com.mentara.dto.response.CommentResponse;
+import com.mentara.service.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@CrossOrigin(origins = &quot;*&quot;, maxAge = 3600)
+@RestController
+@RequestMapping(&quot;/admin&quot;)
+@PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+<span class="fc" id="L25">public class AdminController {</span>
+
+    @Autowired
+    private AdminService adminService;
+
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private PostService postService;
+
+    @Autowired
+    private CommentService commentService;
+
+    @Autowired
+    private ChatRoomService chatRoomService;
+
+    @Autowired
+    private ChatRoomUserService chatRoomUserService;
+
+    /**
+     * 获取管理员统计数据
+     */
+    @GetMapping(&quot;/stats&quot;)
+    public ResponseEntity&lt;AdminStatsResponse&gt; getAdminStats() {
+<span class="fc" id="L50">        AdminStatsResponse stats = adminService.getAdminStats();</span>
+<span class="fc" id="L51">        return ResponseEntity.ok(stats);</span>
+    }
+
+    /**
+     * 获取所有用户列表（用于用户管理，支持分页）
+     */
+    @GetMapping(&quot;/users&quot;)
+    public ResponseEntity&lt;Page&lt;UserProfileResponse&gt;&gt; getAllUsers(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L61">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L62">        Page&lt;UserProfileResponse&gt; users = adminService.getAllUsersWithStats(pageable);</span>
+<span class="fc" id="L63">        return ResponseEntity.ok(users);</span>
+    }
+
+    /**
+     * 搜索用户列表（用于用户管理，支持分页和关键词搜索）
+     */
+    @GetMapping(&quot;/users/search&quot;)
+    public ResponseEntity&lt;Page&lt;UserProfileResponse&gt;&gt; searchUsers(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L74">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L75">        Page&lt;UserProfileResponse&gt; users = adminService.searchUsersWithStats(keyword, pageable);</span>
+<span class="fc" id="L76">        return ResponseEntity.ok(users);</span>
+    }
+
+    /**
+     * 获取用户详细信息
+     */
+    @GetMapping(&quot;/users/{id}&quot;)
+    public ResponseEntity&lt;UserProfileResponse&gt; getUserDetails(@PathVariable Long id) {
+<span class="fc" id="L84">        UserProfileResponse userStats = adminService.getUserStatsById(id);</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if (userStats != null) {</span>
+<span class="fc" id="L86">            return ResponseEntity.ok(userStats);</span>
+        } else {
+<span class="fc" id="L88">            return ResponseEntity.notFound().build();</span>
+        }
+    }
+
+    /**
+     * 禁用用户
+     */
+    @PutMapping(&quot;/users/{id}/suspend&quot;)
+    public ResponseEntity&lt;?&gt; suspendUser(@PathVariable Long id) {
+        try {
+<span class="fc" id="L98">            userService.disableUser(id);</span>
+<span class="fc" id="L99">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;用户已禁用&quot;));</span>
+<span class="nc" id="L100">        } catch (Exception e) {</span>
+<span class="nc" id="L101">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;禁用用户失败: &quot; + e.getMessage()));</span>
+        }
+    }
+
+    /**
+     * 启用用户
+     */
+    @PutMapping(&quot;/users/{id}/activate&quot;)
+    public ResponseEntity&lt;?&gt; activateUser(@PathVariable Long id) {
+        try {
+<span class="fc" id="L111">            userService.enableUser(id);</span>
+<span class="fc" id="L112">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;用户已启用&quot;));</span>
+<span class="nc" id="L113">        } catch (Exception e) {</span>
+<span class="nc" id="L114">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;启用用户失败: &quot; + e.getMessage()));</span>
+        }
+    }
+
+    /**
+     * 删除用户
+     */
+    @DeleteMapping(&quot;/users/{id}&quot;)
+    public ResponseEntity&lt;?&gt; deleteUser(@PathVariable Long id) {
+<span class="fc" id="L123">        userService.deleteUser(id);</span>
+<span class="fc" id="L124">        return ResponseEntity.ok().build();</span>
+    }
+
+    /**
+     * 更新用户角色
+     */
+    @PutMapping(&quot;/users/{id}/role&quot;)
+    public ResponseEntity&lt;?&gt; updateUserRole(@PathVariable Long id, @RequestParam String role) {
+        try {
+<span class="fc" id="L133">            userService.updateUserRole(id, role);</span>
+<span class="fc" id="L134">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;用户角色已更新&quot;));</span>
+<span class="fc" id="L135">        } catch (Exception e) {</span>
+<span class="fc" id="L136">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;更新用户角色失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    /**
+     * 获取被举报的帖子列表
+     */
+    @GetMapping(&quot;/reported-posts&quot;)
+    public ResponseEntity&lt;Page&lt;ReportedPostResponse&gt;&gt; getReportedPosts(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L147">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L148">        Page&lt;ReportedPostResponse&gt; reportedPosts = postService.getReportedPosts(pageable);</span>
+<span class="fc" id="L149">        return ResponseEntity.ok(reportedPosts);</span>
+    }
+    
+    // ================== 帖子审核相关API ==================
+    
+    /**
+     * 获取待审核的帖子列表
+     */
+    @GetMapping(&quot;/pending-posts&quot;)
+    public ResponseEntity&lt;Page&lt;PostResponse&gt;&gt; getPendingPosts(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size,
+            @RequestParam(required = false) String state) {
+<span class="fc" id="L162">        Pageable pageable = PageRequest.of(page, size);</span>
+        Page&lt;PostResponse&gt; posts;
+        
+<span class="pc bpc" id="L165" title="1 of 4 branches missed.">        if (state != null &amp;&amp; !state.trim().isEmpty()) {</span>
+<span class="fc bfc" id="L166" title="All 5 branches covered.">            switch (state.toLowerCase()) {</span>
+                case &quot;pending&quot;:
+<span class="fc" id="L168">                    posts = postService.getPendingAuditPosts(pageable);</span>
+<span class="fc" id="L169">                    break;</span>
+                case &quot;waiting&quot;:
+<span class="fc" id="L171">                    posts = postService.getNeedAdminCheckPosts(pageable);</span>
+<span class="fc" id="L172">                    break;</span>
+                case &quot;invalid&quot;:
+<span class="fc" id="L174">                    posts = postService.getInvalidPosts(pageable);</span>
+<span class="fc" id="L175">                    break;</span>
+                case &quot;deleted&quot;:
+<span class="fc" id="L177">                    posts = postService.getDeletedPosts(pageable);</span>
+<span class="fc" id="L178">                    break;</span>
+                default:
+<span class="fc" id="L180">                    posts = postService.getPendingAuditPosts(pageable);</span>
+                    break;
+<span class="fc" id="L182">            }</span>
+        } else {
+<span class="fc" id="L184">            posts = postService.getPendingAuditPosts(pageable);</span>
+        }
+        
+<span class="fc" id="L187">        return ResponseEntity.ok(posts);</span>
+    }
+    
+    /**
+     * 通过帖子审核
+     */
+    @PutMapping(&quot;/posts/{postId}/approve&quot;)
+    public ResponseEntity&lt;?&gt; approvePost(@PathVariable Long postId) {
+        try {
+<span class="fc" id="L196">            postService.approvePost(postId);</span>
+<span class="fc" id="L197">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;帖子审核已通过&quot;));</span>
+<span class="fc" id="L198">        } catch (Exception e) {</span>
+<span class="fc" id="L199">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;通过审核失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    /**
+     * 拒绝帖子审核
+     */
+    @PutMapping(&quot;/posts/{postId}/reject&quot;)
+    public ResponseEntity&lt;?&gt; rejectPost(@PathVariable Long postId) {
+        try {
+<span class="fc" id="L209">            postService.rejectPost(postId);</span>
+<span class="fc" id="L210">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;帖子审核已拒绝&quot;));</span>
+<span class="fc" id="L211">        } catch (Exception e) {</span>
+<span class="fc" id="L212">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;拒绝审核失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    /**
+     * 删除被举报的帖子（管理员操作）
+     */
+    @DeleteMapping(&quot;/posts/{postId}&quot;)
+    public ResponseEntity&lt;?&gt; deleteReportedPost(@PathVariable Long postId) {
+        try {
+<span class="fc" id="L222">        postService.deletePostByAdmin(postId);</span>
+<span class="fc" id="L223">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;帖子已删除&quot;));</span>
+<span class="fc" id="L224">        } catch (Exception e) {</span>
+<span class="fc" id="L225">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;删除帖子失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    /**
+     * 忽略帖子举报（管理员操作）
+     */
+    @PutMapping(&quot;/posts/{postId}/ignore-reports&quot;)
+    public ResponseEntity&lt;?&gt; ignorePostReports(@PathVariable Long postId) {
+<span class="fc" id="L234">        postService.ignorePostReports(postId);</span>
+<span class="fc" id="L235">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;举报已忽略&quot;));</span>
+    }
+
+    /**
+     * 改变帖子状态（管理员操作）
+     */
+    @PutMapping(&quot;/posts/{postId}/change-status&quot;)
+    public ResponseEntity&lt;?&gt; changePostStatus(@PathVariable Long postId, @RequestBody java.util.Map&lt;String, String&gt; request) {
+        try {
+<span class="fc" id="L244">            String status = request.get(&quot;status&quot;);</span>
+<span class="fc" id="L245">            postService.changePostStatus(postId, status);</span>
+<span class="fc" id="L246">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;帖子状态已更改&quot;));</span>
+<span class="fc" id="L247">        } catch (Exception e) {</span>
+<span class="fc" id="L248">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;更改帖子状态失败: &quot; + e.getMessage()));</span>
+        }
+    }
+
+    /**
+     * 通过帖子举报（管理员操作）
+     */
+    @PutMapping(&quot;/posts/{postId}/approve-report&quot;)
+    public ResponseEntity&lt;?&gt; approvePostReport(@PathVariable Long postId) {
+        try {
+<span class="nc" id="L258">            postService.approvePostReport(postId);</span>
+<span class="nc" id="L259">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;举报已通过&quot;));</span>
+<span class="fc" id="L260">        } catch (Exception e) {</span>
+<span class="fc" id="L261">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;通过举报失败: &quot; + e.getMessage()));</span>
+        }
+    }
+
+    /**
+     * 获取被举报的评论列表
+     */
+    @GetMapping(&quot;/reported-comments&quot;)
+    public ResponseEntity&lt;Page&lt;ReportedCommentResponse&gt;&gt; getReportedComments(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size,
+            @RequestParam(required = false) String state) {
+<span class="fc" id="L273">        Pageable pageable = PageRequest.of(page, size);</span>
+        Page&lt;ReportedCommentResponse&gt; reportedComments;
+        
+<span class="pc bpc" id="L276" title="1 of 4 branches missed.">        if (state != null &amp;&amp; !state.trim().isEmpty()) {</span>
+<span class="pc bpc" id="L277" title="1 of 4 branches missed.">            switch (state.toLowerCase()) {</span>
+                case &quot;waiting&quot;:
+<span class="fc" id="L279">                    reportedComments = commentService.getWaitingCommentReports(pageable);</span>
+<span class="fc" id="L280">                    break;</span>
+                case &quot;valid&quot;:
+<span class="nc" id="L282">                    reportedComments = commentService.getValidCommentReports(pageable);</span>
+<span class="nc" id="L283">                    break;</span>
+                case &quot;invalid&quot;:
+<span class="fc" id="L285">                    reportedComments = commentService.getInvalidCommentReports(pageable);</span>
+<span class="fc" id="L286">                    break;</span>
+                default:
+<span class="fc" id="L288">                    reportedComments = commentService.getReportedComments(pageable);</span>
+                    break;
+<span class="fc" id="L290">            }</span>
+        } else {
+<span class="fc" id="L292">            reportedComments = commentService.getReportedComments(pageable);</span>
+        }
+        
+<span class="fc" id="L295">        return ResponseEntity.ok(reportedComments);</span>
+    }
+    
+    /**
+     * 删除被举报的评论（管理员操作）
+     */
+    @DeleteMapping(&quot;/comments/{commentId}&quot;)
+    public ResponseEntity&lt;?&gt; deleteReportedComment(@PathVariable Long commentId) {
+<span class="fc" id="L303">        commentService.deleteCommentByAdmin(commentId);</span>
+<span class="fc" id="L304">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;评论已删除&quot;));</span>
+    }
+    
+    /**
+     * 管理员删除任意评论（管理员操作）
+     */
+    @DeleteMapping(&quot;/comments/{commentId}/force&quot;)
+    public ResponseEntity&lt;?&gt; forceDeleteComment(@PathVariable Long commentId) {
+<span class="fc" id="L312">        commentService.forceDeleteComment(commentId);</span>
+<span class="fc" id="L313">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;评论已删除&quot;));</span>
+    }
+
+    /**
+     * 通过评论举报（管理员操作）
+     */
+    @PutMapping(&quot;/comments/{commentId}/approve-report&quot;)
+    public ResponseEntity&lt;?&gt; approveCommentReport(@PathVariable Long commentId) {
+<span class="nc" id="L321">        commentService.approveCommentReport(commentId);</span>
+<span class="nc" id="L322">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;举报已通过&quot;));</span>
+    }
+
+    /**
+     * 忽略评论举报（管理员操作）
+     */
+    @PutMapping(&quot;/comments/{commentId}/ignore-reports&quot;)
+    public ResponseEntity&lt;?&gt; ignoreCommentReports(@PathVariable Long commentId) {
+<span class="fc" id="L330">        commentService.ignoreCommentReports(commentId);</span>
+<span class="fc" id="L331">        return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;举报已忽略&quot;));</span>
+    }
+
+    /**
+     * 获取所有聊天室列表
+     */
+    @GetMapping(&quot;/chat-rooms&quot;)
+    public ResponseEntity&lt;List&lt;ChatRoomResponse&gt;&gt; getAllChatRooms() {
+<span class="fc" id="L339">        List&lt;ChatRoomResponse&gt; chatRooms = chatRoomService.getAllRooms();</span>
+<span class="fc" id="L340">        return ResponseEntity.ok(chatRooms);</span>
+    }
+
+    /**
+     * 删除聊天室用户（管理员操作）
+     */
+    @DeleteMapping(&quot;/delete/chatRoomUserId/{chatRoomUserId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public boolean deleteChatUser(
+            @PathVariable Long chatRoomUserId
+    ){
+        try {
+<span class="nc" id="L352">            chatRoomUserService.deleteUser(chatRoomUserId);</span>
+<span class="nc" id="L353">            return true;</span>
+<span class="fc" id="L354">        } catch (Exception e) {</span>
+<span class="fc" id="L355">            return false;</span>
+        }
+    }
+
+    /**
+     * 删除聊天室（管理员操作）
+     */
+    @DeleteMapping(&quot;/chat-rooms/{roomId}&quot;)
+    public ResponseEntity&lt;?&gt; deleteChatRoom(@PathVariable Long roomId) {
+        try {
+<span class="fc" id="L365">            chatRoomService.deleteRoom(roomId);</span>
+<span class="fc" id="L366">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;聊天室已删除&quot;));</span>
+<span class="fc" id="L367">        } catch (Exception e) {</span>
+<span class="fc" id="L368">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;删除聊天室失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    // ================== 软删除相关API ==================
+    
+    /**
+     * 获取已删除的帖子（管理员功能）
+     */
+    @GetMapping(&quot;/deleted-posts&quot;)
+    public ResponseEntity&lt;Page&lt;PostResponse&gt;&gt; getDeletedPosts(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size,
+            @RequestParam(required = false) String type) {
+<span class="fc" id="L382">        Pageable pageable = PageRequest.of(page, size);</span>
+        Page&lt;PostResponse&gt; posts;
+        
+<span class="pc bpc" id="L385" title="1 of 4 branches missed.">        if (type != null &amp;&amp; !type.trim().isEmpty()) {</span>
+<span class="pc bpc" id="L386" title="1 of 3 branches missed.">            switch (type.toLowerCase()) {</span>
+                case &quot;reported&quot;:
+<span class="fc" id="L388">                    posts = postService.getReportedDeletedPosts(pageable);</span>
+<span class="fc" id="L389">                    break;</span>
+                case &quot;audit&quot;:
+<span class="nc" id="L391">                    posts = postService.getAuditDeletedPosts(pageable);</span>
+<span class="nc" id="L392">                    break;</span>
+                default:
+<span class="fc" id="L394">                    posts = postService.getDeletedPosts(pageable);</span>
+                    break;
+<span class="fc" id="L396">            }</span>
+        } else {
+<span class="fc" id="L398">            posts = postService.getDeletedPosts(pageable);</span>
+        }
+        
+<span class="fc" id="L401">        return ResponseEntity.ok(posts);</span>
+    }
+    
+    /**
+     * 获取删除帖子统计信息
+     */
+    @GetMapping(&quot;/deleted-posts/stats&quot;)
+    public ResponseEntity&lt;?&gt; getDeletedPostsStats() {
+<span class="fc" id="L409">        Integer reportedCount = postService.getReportedDeletedPostsCount();</span>
+<span class="fc" id="L410">        Integer auditCount = postService.getAuditDeletedPostsCount();</span>
+        
+<span class="fc" id="L412">        return ResponseEntity.ok(java.util.Map.of(</span>
+          &quot;reportedDeletedCount&quot;, reportedCount,
+            &quot;auditDeletedCount&quot;, auditCount,
+<span class="fc" id="L415">            &quot;totalDeletedCount&quot;, reportedCount + auditCount</span>
+        ));
+    }
+    
+    /**
+     * 获取指定用户的已删除帖子
+     */
+    @GetMapping(&quot;/users/{userId}/deleted-posts&quot;)
+    public ResponseEntity&lt;Page&lt;PostResponse&gt;&gt; getDeletedPostsByUser(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L427">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L428">        Page&lt;PostResponse&gt; deletedPosts = postService.getDeletedPostsByUser(userId, pageable);</span>
+<span class="fc" id="L429">        return ResponseEntity.ok(deletedPosts);</span>
+    }
+    
+    /**
+     * 恢复已删除的帖子（从INVALID状态改为VALID）
+     */
+    @PutMapping(&quot;/posts/{postId}/restore&quot;)
+    public ResponseEntity&lt;?&gt; restorePost(@PathVariable Long postId) {
+        try {
+<span class="fc" id="L438">            postService.restorePost(postId);</span>
+<span class="fc" id="L439">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;帖子已恢复&quot;));</span>
+<span class="fc" id="L440">        } catch (Exception e) {</span>
+<span class="fc" id="L441">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;恢复帖子失败: &quot; + e.getMessage()));</span>
+        }
+    }
+    
+    /**
+     * 获取所有已删除的评论（管理员查看）
+     */
+    @GetMapping(&quot;/deleted-comments&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getDeletedComments(
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L452">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L453">        Page&lt;CommentResponse&gt; deletedComments = commentService.getDeletedComments(pageable);</span>
+<span class="fc" id="L454">        return ResponseEntity.ok(deletedComments);</span>
+    }
+    
+    /**
+     * 获取指定用户的已删除评论
+     */
+    @GetMapping(&quot;/users/{userId}/deleted-comments&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getDeletedCommentsByUser(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = &quot;0&quot;) int page,
+            @RequestParam(defaultValue = &quot;10&quot;) int size) {
+<span class="fc" id="L465">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L466">        Page&lt;CommentResponse&gt; deletedComments = commentService.getDeletedCommentsByUser(userId, pageable);</span>
+<span class="fc" id="L467">        return ResponseEntity.ok(deletedComments);</span>
+    }
+    
+    /**
+     * 恢复已删除的评论
+     */
+    @PutMapping(&quot;/comments/{commentId}/restore&quot;)
+    public ResponseEntity&lt;?&gt; restoreComment(@PathVariable Long commentId) {
+        try {
+<span class="fc" id="L476">            commentService.restoreComment(commentId);</span>
+<span class="fc" id="L477">            return ResponseEntity.ok(java.util.Map.of(&quot;message&quot;, &quot;评论已恢复&quot;));</span>
+<span class="fc" id="L478">        } catch (Exception e) {</span>
+<span class="fc" id="L479">            return ResponseEntity.badRequest().body(java.util.Map.of(&quot;error&quot;, &quot;恢复评论失败: &quot; + e.getMessage()));</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

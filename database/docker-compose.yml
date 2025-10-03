@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: admin20
+      MYSQL_DATABASE: mentara
+      MYSQL_USER: mentara-admin
+      MYSQL_PASSWORD: mentara-admin
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql # ✅ 持久化到宿主机目录
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: admin20
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./data/mongodb:/data/db # ✅ 持久化到宿主机目录
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334" # gRPC
+    volumes:
+      - ./data/qdrant:/qdrant/storage # ✅ 持久化到宿主机目录
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data # ✅ 持久化到宿主机目录
+    command: redis-server --appendonly yes # 启用AOF持久化 
+

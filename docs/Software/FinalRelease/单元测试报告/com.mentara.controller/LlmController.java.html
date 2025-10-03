@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LlmController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">LlmController.java</span></div><h1>LlmController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.document.LlmMessageDocument;
+import com.mentara.document.LlmSessionDocument;
+import com.mentara.dto.request.LlmChatRequest;
+import com.mentara.dto.request.SessionIdRequest;
+import com.mentara.security.CurrentUser;
+import com.mentara.security.UserPrincipal;
+import com.mentara.service.LlmChatService;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+import java.util.List;
+
+/**
+ * LLM历史记录控制器
+ */
+@RestController
+@RequestMapping(&quot;/llm&quot;)
+<span class="fc" id="L24">@Slf4j</span>
+<span class="fc" id="L25">public class LlmController {</span>
+
+    @Autowired
+    private LlmChatService llmChatService;
+
+    
+    @GetMapping(&quot;/chat/fetch&quot;)
+    public ResponseEntity&lt;List&lt;LlmSessionDocument&gt;&gt; fetchSessions(@CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L33">        List&lt;LlmSessionDocument&gt; sessions = llmChatService.fetchSessions(currentUser);</span>
+<span class="fc" id="L34">        return ResponseEntity.ok(sessions);</span>
+    }
+
+    @GetMapping(&quot;/chat/messages/{sessionId}&quot;)
+    public ResponseEntity&lt;List&lt;LlmMessageDocument&gt;&gt; getMessages(@PathVariable String sessionId, @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L39">        List&lt;LlmMessageDocument&gt; messages = llmChatService.getMessages(sessionId, currentUser);</span>
+<span class="fc" id="L40">        return ResponseEntity.ok(messages);</span>
+    }
+
+    @PostMapping(&quot;/chat/send&quot;)
+    public ResponseEntity&lt;LlmMessageDocument&gt; sendMessage(@Valid @RequestBody LlmChatRequest request, @CurrentUser UserPrincipal currentUser) {
+        try {
+            // 发送聊天消息
+<span class="fc" id="L47">            LlmMessageDocument response = llmChatService.sendMessage(request.getMessage(), request.getSessionId(), currentUser);</span>
+<span class="fc" id="L48">            return ResponseEntity.ok(response);</span>
+<span class="fc" id="L49">        } catch (Exception e) {</span>
+<span class="fc" id="L50">            log.error(&quot;发送聊天消息失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L51">            return ResponseEntity.internalServerError().build();</span>
+        }
+    }
+
+    @PostMapping(&quot;/chat/clear&quot;)
+    public ResponseEntity&lt;List&lt;LlmMessageDocument&gt;&gt; clearLlmMemory(@Valid @RequestBody SessionIdRequest sessionId, @CurrentUser UserPrincipal currentUser) {
+        try {
+            // 清除聊天历史
+<span class="fc" id="L59">            List&lt;LlmMessageDocument&gt; clearedMessages = llmChatService.clearLlmMemory(sessionId.getSessionId(), currentUser);</span>
+            
+<span class="fc" id="L61">            return ResponseEntity.ok(clearedMessages);</span>
+<span class="fc" id="L62">        } catch (Exception e) {</span>
+<span class="fc" id="L63">            log.error(&quot;清除聊天历史失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L64">            return ResponseEntity.internalServerError().build();</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

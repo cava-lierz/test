@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationWebSocketService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service</a> &gt; <span class="el_source">NotificationWebSocketService.java</span></div><h1>NotificationWebSocketService.java</h1><pre class="source lang-java linenums">package com.mentara.service;
+
+import com.mentara.dto.response.BaseNotificationResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * 通知 WebSocket 异步服务
+ * 专门负责异步发送 WebSocket 通知
+ */
+@Service
+<span class="fc" id="L15">@Slf4j</span>
+<span class="fc" id="L16">public class NotificationWebSocketService {</span>
+    
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+    
+    /**
+     * 异步发送 WebSocket 通知
+     * @param receiverId 接收者ID
+     * @param response 通知响应对象
+     */
+    @Async
+    public void sendNotificationAsync(Long receiverId, BaseNotificationResponse response) {
+        try {
+<span class="nc" id="L29">            messagingTemplate.convertAndSendToUser(</span>
+<span class="nc" id="L30">                receiverId.toString(),</span>
+                &quot;/queue/notifications&quot;,
+                response
+            );
+<span class="nc" id="L34">            log.debug(&quot;WebSocket通知发送成功: receiverId={}&quot;, receiverId);</span>
+<span class="nc" id="L35">        } catch (Exception e) {</span>
+<span class="nc" id="L36">            log.error(&quot;WebSocket通知发送失败: receiverId={}, error={}&quot;, receiverId, e.getMessage(), e);</span>
+<span class="nc" id="L37">        }</span>
+<span class="nc" id="L38">    }</span>
+    
+    /**
+     * 批量异步发送 WebSocket 通知
+     * @param receiverIds 接收者ID列表
+     * @param response 通知响应对象
+     */
+    @Async
+    public void sendNotificationToMultipleUsersAsync(java.util.List&lt;Long&gt; receiverIds, BaseNotificationResponse response) {
+<span class="nc" id="L47">        receiverIds.forEach(receiverId -&gt; {</span>
+            try {
+<span class="nc" id="L49">                messagingTemplate.convertAndSendToUser(</span>
+<span class="nc" id="L50">                    receiverId.toString(),</span>
+                    &quot;/queue/notifications&quot;,
+                    response
+                );
+<span class="nc" id="L54">                log.debug(&quot;WebSocket通知发送成功: receiverId={}&quot;, receiverId);</span>
+<span class="nc" id="L55">            } catch (Exception e) {</span>
+<span class="nc" id="L56">                log.error(&quot;WebSocket通知发送失败: receiverId={}, error={}&quot;, receiverId, e.getMessage(), e);</span>
+<span class="nc" id="L57">            }</span>
+<span class="nc" id="L58">        });</span>
+<span class="nc" id="L59">    }</span>
+    
+    /**
+     * 异步广播系统通知到所有用户
+     * @param response 通知响应对象
+     */
+    @Async
+    public void sendSystemNotificationAsync(BaseNotificationResponse response) {
+        try {
+<span class="fc" id="L68">            messagingTemplate.convertAndSend(&quot;/topic/notifications&quot;, response);</span>
+<span class="fc" id="L69">            log.debug(&quot;系统通知广播发送成功&quot;);</span>
+<span class="nc" id="L70">        } catch (Exception e) {</span>
+<span class="nc" id="L71">            log.error(&quot;系统通知广播发送失败: error={}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L72">        }</span>
+<span class="fc" id="L73">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserFollow.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">UserFollow.java</span></div><h1>UserFollow.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+<span class="nc bnc" id="L11" title="All 38 branches missed.">@Data</span>
+<span class="fc" id="L12">@NoArgsConstructor</span>
+<span class="nc" id="L13">@AllArgsConstructor</span>
+@Table(name = &quot;user_follows&quot;, uniqueConstraints = {
+    @UniqueConstraint(columnNames = {&quot;follower_id&quot;, &quot;following_id&quot;})
+    }, 
+    indexes = {
+        @Index(name = &quot;idx_user_follows_follower_following&quot;, columnList = &quot;follower_id, following_id&quot;),
+        @Index(name = &quot;idx_user_follows_following_follower&quot;, columnList = &quot;following_id, follower_id&quot;)
+    }
+)
+public class UserFollow {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="nc" id="L25">    private Long id;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;follower_id&quot;, nullable = false)
+<span class="nc" id="L29">    private User follower; // 关注者</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;following_id&quot;, nullable = false)
+<span class="nc" id="L33">    private User following; // 被关注者</span>
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+<span class="nc" id="L36">    private LocalDateTime createdAt;</span>
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L40">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L41">    }</span>
+
+    // 构造函数
+<span class="fc" id="L44">    public UserFollow(User follower, User following) {</span>
+<span class="fc" id="L45">        this.follower = follower;</span>
+<span class="fc" id="L46">        this.following = following;</span>
+<span class="fc" id="L47">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MoodScore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">MoodScore.java</span></div><h1>MoodScore.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+<span class="pc bnc" id="L11" title="All 80 branches missed.">@Data</span>
+<span class="fc" id="L12">@NoArgsConstructor</span>
+<span class="nc" id="L13">@AllArgsConstructor</span>
+@Table(name = &quot;mood_scores&quot;, indexes = {
+    @Index(name = &quot;idx_mood_scores_user_created&quot;, columnList = &quot;user_id, created_at DESC&quot;)
+})
+public class MoodScore {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="nc" id="L21">    private Long id;</span>
+
+    // 关联用户
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;user_id&quot;, nullable = false)
+<span class="fc" id="L26">    private User user;</span>
+
+    // 关联Post（可选）
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;post_id&quot;)
+<span class="nc" id="L31">    private Post post;</span>
+
+    // 关联Checkin（可选）
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;checkin_id&quot;)
+<span class="nc" id="L36">    private Checkin checkin;</span>
+
+    // 内容类型：POST 或 CHECKIN
+    @Enumerated(EnumType.STRING)
+    @Column(name = &quot;content_type&quot;, nullable = false)
+<span class="fc" id="L41">    private ContentType contentType;</span>
+
+    // 原始文本内容
+    @Column(name = &quot;content_text&quot;, columnDefinition = &quot;TEXT&quot;)
+<span class="fc" id="L45">    private String contentText;</span>
+
+    // AI分析的心情得分（0-1分）
+<span class="pc" id="L48">    @Column(name = &quot;mood_grade&quot;)</span>
+<span class="pc" id="L49">    private Integer moodGrade = 1;</span>
+
+    // 是否触发报警
+<span class="pc" id="L52">    @Column(name = &quot;is_alert&quot;, nullable = false)</span>
+<span class="pc" id="L53">    private Boolean isAlert = false;</span>
+
+    @Column(name = &quot;alert_socre&quot;)
+<span class="fc" id="L56">    private double alertScore;</span>
+
+    // 创建时间
+    @Column(name = &quot;created_at&quot;, nullable = false, updatable = false)
+<span class="nc" id="L60">    private LocalDateTime createdAt;</span>
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L64">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L65">    }</span>
+
+    // 内容类型枚举
+<span class="fc" id="L68">    public enum ContentType {</span>
+<span class="fc" id="L69">        POST,       // 帖子</span>
+<span class="fc" id="L70">        CHECKIN     // 打卡记录</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

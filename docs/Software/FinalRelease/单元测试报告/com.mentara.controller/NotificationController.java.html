@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">NotificationController.java</span></div><h1>NotificationController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.response.BaseNotificationResponse;
+import com.mentara.service.NotificationService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import com.mentara.security.UserPrincipal;
+import com.mentara.security.CurrentUser;
+import com.mentara.dto.request.SystemNotificationRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+@RestController
+@RequestMapping(&quot;/notifications&quot;)
+<span class="fc" id="L20">public class NotificationController {</span>
+    @Autowired
+    private NotificationService notificationService;
+    
+    
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    /**
+     * HTTP API: 获取通知列表
+     */
+    @GetMapping(&quot;/me/unread&quot;)
+    public ResponseEntity&lt;Page&lt;BaseNotificationResponse&gt;&gt; getUnreadNotifications(
+        @RequestParam(defaultValue = &quot;0&quot;) int page,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser
+    ) {
+<span class="pc bpc" id="L37" title="1 of 2 branches missed.">        Long userId = currentUser == null ? null : currentUser.getId();</span>
+<span class="fc" id="L38">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L39">        Page&lt;BaseNotificationResponse&gt; notifications = notificationService.getUnreadNotificationsForUser(userId, pageable);</span>
+<span class="fc" id="L40">        return ResponseEntity.ok(notifications);</span>
+    }
+
+    /*
+     * HTTP API: 发送系统通知
+     */
+    @PostMapping(&quot;/system&quot;)
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    public ResponseEntity&lt;?&gt; sendSystemNotification(@RequestBody SystemNotificationRequest request) {
+<span class="fc" id="L49">        notificationService.createAndSendSystemNotification(request);</span>
+<span class="fc" id="L50">        return ResponseEntity.ok().build();</span>
+    }
+
+    /**
+     * 标记单条通知为已读
+     */
+    @PatchMapping(&quot;/{id}/read&quot;)
+    public ResponseEntity&lt;Void&gt; markAsRead(@PathVariable(&quot;id&quot;) Long notificationId, @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L58">        notificationService.markAsRead(notificationId, currentUser.getId());</span>
+<span class="fc" id="L59">        return ResponseEntity.ok().build();</span>
+    }
+
+    /**
+     * 一键全部标记为已读
+     */
+    @PatchMapping(&quot;/me/readAll&quot;)
+    public ResponseEntity&lt;Void&gt; markAllAsRead(@CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L67">        notificationService.markAllAsRead(currentUser.getId());</span>
+<span class="fc" id="L68">        return ResponseEntity.ok().build();</span>
+    }
+    
+    /**
+     * 删除单条通知
+     */
+    @DeleteMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;Void&gt; deleteNotification(
+        @PathVariable(&quot;id&quot;) Long notificationId, 
+        @CurrentUser UserPrincipal currentUser
+    ) {
+<span class="fc" id="L79">        notificationService.deleteNotification(notificationId, currentUser.getId());</span>
+<span class="fc" id="L80">        return ResponseEntity.ok().build();</span>
+    }
+    
+    /**
+     * 删除所有通知
+     */
+    @DeleteMapping(&quot;/me/all&quot;)
+    public ResponseEntity&lt;Void&gt; deleteAllNotifications(@CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L88">        notificationService.deleteAllNotifications(currentUser.getId());</span>
+<span class="fc" id="L89">        return ResponseEntity.ok().build();</span>
+    }
+
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

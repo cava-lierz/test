@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EmbeddingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service</a> &gt; <span class="el_source">EmbeddingService.java</span></div><h1>EmbeddingService.java</h1><pre class="source lang-java linenums">package com.mentara.service;
+
+import com.mentara.dto.response.EmbeddingResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+
+<span class="fc" id="L17">@Slf4j</span>
+@Service
+<span class="fc" id="L19">public class EmbeddingService {</span>
+
+    @Autowired
+    private WebClient webClient;
+
+    @Value(&quot;${embedding.host}&quot;)
+    private String embeddingHost;
+
+    @Value(&quot;${embedding.port}&quot;)
+    private Integer embeddingPort;
+
+    @Value(&quot;${embedding.timeout}&quot;)
+    private Long embeddingTimeout;
+
+    public List&lt;Float&gt; getEmbedding(String text) {
+        try {
+<span class="fc" id="L35">            log.info(&quot;发送请求到embedding服务，文字: {}&quot;, text);</span>
+
+            // 创建请求对象
+<span class="fc" id="L38">            Map&lt;String, String&gt; request = Map.of(&quot;text&quot;, text);</span>
+
+<span class="fc" id="L40">            EmbeddingResponse response = webClient.post()</span>
+<span class="fc" id="L41">                    .uri(&quot;http://&quot; + embeddingHost + &quot;:&quot; + embeddingPort + &quot;/embedding&quot;)</span>
+<span class="fc" id="L42">                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)</span>
+<span class="fc" id="L43">                    .bodyValue(request)</span>
+<span class="fc" id="L44">                    .retrieve()</span>
+<span class="fc" id="L45">                    .bodyToMono(EmbeddingResponse.class)</span>
+<span class="fc" id="L46">                    .timeout(Duration.ofMillis(embeddingTimeout))</span>
+<span class="fc" id="L47">                    .retry(3)</span>
+<span class="nc" id="L48">                    .block();</span>
+
+<span class="nc bnc" id="L50" title="All 4 branches missed.">            if (response != null &amp;&amp; response.getEmbedding() != null) {</span>
+<span class="nc" id="L51">                return response.getEmbedding();</span>
+            } else {
+<span class="nc" id="L53">                throw new RuntimeException(&quot;响应中没有找到embedding数组&quot;);</span>
+            }
+
+<span class="nc" id="L56">        } catch (WebClientResponseException e) {</span>
+<span class="nc" id="L57">            log.error(&quot;Embedding API请求失败: {} - {}&quot;, e.getStatusCode(), e.getResponseBodyAsString());</span>
+<span class="nc" id="L58">            throw new RuntimeException(&quot;Embedding API请求失败: &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L59">        } catch (Exception e) {</span>
+<span class="fc" id="L60">            log.error(&quot;调用Embedding API时发生异常&quot;, e);</span>
+<span class="fc" id="L61">            throw new RuntimeException(&quot;调用Embedding API时发生异常&quot;, e);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

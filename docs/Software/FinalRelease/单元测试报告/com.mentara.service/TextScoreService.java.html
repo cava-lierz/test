@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TextScoreService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service</a> &gt; <span class="el_source">TextScoreService.java</span></div><h1>TextScoreService.java</h1><pre class="source lang-java linenums">package com.mentara.service;
+
+import jakarta.persistence.criteria.CriteriaBuilder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 文本打分服务
+ * 调用Python微服务进行文本打分
+ */
+<span class="fc" id="L20">@Slf4j</span>
+@Service
+public class TextScoreService {
+
+    private final WebClient webClient;
+    
+    @Value(&quot;${python.microservice.url:http://localhost:8000}&quot;)
+    private String pythonServiceUrl;
+    
+    @Value(&quot;${python.microservice.endpoint:/mood_score}&quot;)
+    private String scoreEndpoint;
+    
+    @Value(&quot;${python.microservice.timeout:10000}&quot;)
+    private int timeout;
+
+    @Autowired
+<span class="fc" id="L36">    public TextScoreService(WebClient webClient) {</span>
+<span class="fc" id="L37">        this.webClient = webClient;</span>
+<span class="fc" id="L38">    }</span>
+
+    /**
+     * 对文本进行打分
+     * 
+     * @param text 需要打分的文本
+     * @param scoreType 打分类型（可选）
+     * @return 打分结果，如果失败返回null
+     */
+    public Integer scoreText(String text, String scoreType) {
+        try {
+<span class="fc" id="L49">            log.info(&quot;开始对文本进行打分，文本长度: {}&quot;, text.length());</span>
+            
+<span class="fc" id="L51">            Map&lt;String, Object&gt; requestBody = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L52">            requestBody.put(&quot;text&quot;, text);</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">            if (scoreType != null) {</span>
+<span class="fc" id="L54">                requestBody.put(&quot;score_type&quot;, scoreType);</span>
+            }
+            
+<span class="fc" id="L57">            String fullUrl = pythonServiceUrl + scoreEndpoint;</span>
+            
+<span class="fc" id="L59">            Map&lt;String, Object&gt; response = webClient.post()</span>
+<span class="fc" id="L60">                    .uri(fullUrl)</span>
+<span class="fc" id="L61">                    .contentType(MediaType.APPLICATION_JSON)</span>
+<span class="fc" id="L62">                    .bodyValue(requestBody)</span>
+<span class="fc" id="L63">                    .retrieve()</span>
+<span class="fc" id="L64">                    .bodyToMono(Map.class)</span>
+<span class="fc" id="L65">                    .timeout(java.time.Duration.ofMillis(timeout))</span>
+<span class="fc" id="L66">                    .block();</span>
+            
+<span class="pc bpc" id="L68" title="2 of 4 branches missed.">            if (response != null &amp;&amp; response.containsKey(&quot;label&quot;)) {</span>
+<span class="fc" id="L69">                    Integer score = (Integer) response.get(&quot;label&quot;);</span>
+<span class="fc" id="L70">                log.info(&quot;文本打分成功，得分: {}&quot;, score);</span>
+<span class="fc" id="L71">                return score;</span>
+            } else {
+<span class="nc" id="L73">                log.error(&quot;Python微服务返回无效响应: {}&quot;, response);</span>
+<span class="nc" id="L74">                return null;</span>
+            }
+            
+<span class="nc" id="L77">        } catch (WebClientResponseException e) {</span>
+<span class="nc" id="L78">            log.error(&quot;调用Python微服务失败，状态码: {}, 错误信息: {}&quot;, e.getStatusCode(), e.getMessage());</span>
+<span class="nc" id="L79">            return null;</span>
+            
+<span class="fc" id="L81">        } catch (Exception e) {</span>
+<span class="fc" id="L82">            log.error(&quot;文本打分过程中发生异常&quot;, e);</span>
+<span class="fc" id="L83">            return null;</span>
+        }
+    }
+
+    /**
+     * 对文本进行打分（简化版本，不指定打分类型）
+     * 
+     * @param text 需要打分的文本
+     * @return 打分结果，如果失败返回null
+     */
+    public Integer scoreText(String text) {
+<span class="fc" id="L94">        return scoreText(text, null);</span>
+    }
+
+    /**
+     * 健康检查 - 检查Python微服务是否可用
+     */
+    public Mono&lt;Boolean&gt; healthCheck() {
+<span class="fc" id="L101">        String healthUrl = pythonServiceUrl + &quot;/health&quot;;</span>
+<span class="fc" id="L102">        return webClient.get()</span>
+<span class="fc" id="L103">                .uri(healthUrl)</span>
+<span class="fc" id="L104">                .retrieve()</span>
+<span class="fc" id="L105">                .toBodilessEntity()</span>
+<span class="pc" id="L106">                .map(response -&gt; true)</span>
+<span class="fc" id="L107">                .onErrorReturn(false);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

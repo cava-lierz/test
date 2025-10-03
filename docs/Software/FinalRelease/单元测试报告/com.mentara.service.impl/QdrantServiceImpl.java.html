@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>QdrantServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">QdrantServiceImpl.java</span></div><h1>QdrantServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.entity.Post;
+import com.mentara.service.EmbeddingService;
+import com.mentara.service.QdrantService;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.grpc.Points;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+
+import static io.qdrant.client.ConditionFactory.matchKeyword;
+import static io.qdrant.client.PointIdFactory.id;
+import static io.qdrant.client.QueryFactory.nearest;
+import static io.qdrant.client.ValueFactory.value;
+import static io.qdrant.client.VectorsFactory.vectors;
+
+<span class="fc" id="L21">@Slf4j</span>
+@Service
+<span class="fc" id="L23">public class QdrantServiceImpl implements QdrantService {</span>
+
+    @Autowired
+    private QdrantClient qdrantClient;
+
+    @Autowired
+    private EmbeddingService embeddingService;
+
+    @Value(&quot;${qdrant.collection.name:post_vector}&quot;)
+    private String collectionName;
+
+    @Override
+    public Long upsertPostVector(Post post) {
+        try {
+<span class="fc" id="L37">            log.info(&quot;开始存储帖子向量，帖子ID: {}&quot;, post.getId());</span>
+
+            // 构建帖子文本内容
+<span class="fc" id="L40">            String postText = buildPostText(post);</span>
+            
+            // 获取文本向量
+<span class="fc" id="L43">            log.info(&quot;开始向量化&quot;);</span>
+<span class="fc" id="L44">            List&lt;Float&gt; vector = embeddingService.getEmbedding(postText);</span>
+<span class="pc bpc" id="L45" title="1 of 4 branches missed.">            if (vector == null || vector.isEmpty()) {</span>
+<span class="fc" id="L46">                log.error(&quot;无法获取帖子文本的向量&quot;);</span>
+<span class="fc" id="L47">                return null;</span>
+            }
+
+<span class="fc" id="L50">            qdrantClient.upsertAsync(</span>
+<span class="fc" id="L51">                    collectionName,List.of(</span>
+<span class="fc" id="L52">                            Points.PointStruct.newBuilder()</span>
+<span class="fc" id="L53">                                    .setId(id(post.getId()))</span>
+<span class="fc" id="L54">                                    .setVectors(vectors(vector))</span>
+<span class="fc" id="L55">                                    .build()</span>
+                    )
+            );
+
+<span class="fc" id="L59">            log.info(&quot;成功存储帖子向量，帖子ID: {}&quot;, post.getId());</span>
+<span class="fc" id="L60">            return post.getId();</span>
+
+<span class="fc" id="L62">        } catch (Exception e) {</span>
+<span class="fc" id="L63">            log.error(&quot;存储帖子向量失败，帖子ID: {}&quot;, post.getId(), e);</span>
+<span class="fc" id="L64">            return post.getId();</span>
+        }
+    }
+
+    @Override
+    public List&lt;Points.ScoredPoint&gt; queryPostVector(String query) {
+        try {
+            
+            // 获取查询向量
+<span class="fc" id="L73">            List&lt;Float&gt; queryVector = embeddingService.getEmbedding(query);</span>
+<span class="pc bpc" id="L74" title="1 of 4 branches missed.">            if (queryVector == null || queryVector.isEmpty()) {</span>
+<span class="fc" id="L75">                log.error(&quot;无法获取查询文本的向量&quot;);</span>
+<span class="fc" id="L76">                return null;</span>
+            }
+
+<span class="fc" id="L79">            List&lt;Points.ScoredPoint&gt; searchResult =</span>
+<span class="fc" id="L80">                    qdrantClient.queryAsync(Points.QueryPoints.newBuilder()</span>
+<span class="fc" id="L81">                            .setCollectionName(collectionName)</span>
+<span class="fc" id="L82">                            .setLimit(10)</span>
+<span class="fc" id="L83">                            .setQuery(nearest(queryVector))</span>
+<span class="fc" id="L84">                            .build()).get();</span>
+
+
+<span class="fc bfc" id="L87" title="All 2 branches covered.">            if (searchResult != null) {</span>
+<span class="fc" id="L88">                log.info(&quot;找到最近似结果：{}&quot;, searchResult.size());</span>
+<span class="fc" id="L89">                return searchResult;</span>
+            } else {
+<span class="fc" id="L91">                log.info(&quot;未找到相似帖子&quot;);</span>
+<span class="fc" id="L92">                return null;</span>
+            }
+
+<span class="fc" id="L95">        } catch (Exception e) {</span>
+<span class="fc" id="L96">            log.error(&quot;查询相似帖子失败，搜索词 {}&quot;, query, e);</span>
+<span class="fc" id="L97">            return null;</span>
+        }
+    }
+
+    @Override
+    public Long deletePostVector(Post post) {
+        try {
+<span class="fc" id="L104">            log.info(&quot;开始删除帖子向量，帖子ID: {}&quot;, post.getId());</span>
+
+<span class="fc" id="L106">            qdrantClient.deleteAsync(</span>
+                    collectionName,
+<span class="fc" id="L108">                    List.of(id(post.getId()))</span>
+            );
+            
+<span class="fc" id="L111">            log.info(&quot;成功删除帖子向量，帖子ID: {}&quot;, post.getId());</span>
+<span class="fc" id="L112">            return post.getId();</span>
+
+<span class="nc" id="L114">        } catch (Exception e) {</span>
+<span class="nc" id="L115">            log.error(&quot;删除帖子向量失败，帖子ID: {}&quot;, post.getId(), e);</span>
+<span class="nc" id="L116">            return post.getId();</span>
+        }
+    }
+
+    @Override
+    public List&lt;Points.ScoredPoint&gt; accurateQueryPostVector(String query){
+        try {
+
+            // 获取查询向量
+<span class="fc" id="L125">            List&lt;Float&gt; queryVector = embeddingService.getEmbedding(query);</span>
+<span class="pc bpc" id="L126" title="2 of 4 branches missed.">            if (queryVector == null || queryVector.isEmpty()) {</span>
+<span class="nc" id="L127">                log.error(&quot;无法获取查询文本的向量&quot;);</span>
+<span class="nc" id="L128">                return null;</span>
+            }
+
+<span class="fc" id="L131">            List&lt;Points.ScoredPoint&gt; searchResult =</span>
+<span class="fc" id="L132">                    qdrantClient.queryAsync(Points.QueryPoints.newBuilder()</span>
+<span class="fc" id="L133">                            .setCollectionName(collectionName)</span>
+<span class="fc" id="L134">                            .setLimit(10)</span>
+<span class="fc" id="L135">                            .setFilter(Points.Filter.newBuilder().addMust(matchKeyword(&quot;text&quot;, query)))</span>
+<span class="fc" id="L136">                            .setQuery(nearest(queryVector))</span>
+<span class="fc" id="L137">                            .build()).get();</span>
+
+
+<span class="fc bfc" id="L140" title="All 2 branches covered.">            if (searchResult != null) {</span>
+<span class="fc" id="L141">                log.info(&quot;找到最近似结果：{}&quot;, searchResult.size());</span>
+<span class="fc" id="L142">                return searchResult;</span>
+            } else {
+<span class="fc" id="L144">                log.info(&quot;未找到相似帖子&quot;);</span>
+<span class="fc" id="L145">                return null;</span>
+            }
+
+<span class="nc" id="L148">        } catch (Exception e) {</span>
+<span class="nc" id="L149">            log.error(&quot;查询相似帖子失败，搜索词 {}&quot;, query, e);</span>
+<span class="nc" id="L150">            return null;</span>
+        }
+    }
+    /**
+     * 构建帖子文本内容
+     */
+    private String buildPostText(Post post) {
+<span class="fc" id="L157">        StringBuilder text = new StringBuilder();</span>
+        
+<span class="fc bfc" id="L159" title="All 2 branches covered.">        if (post.getTitle() != null) {</span>
+<span class="fc" id="L160">            text.append(post.getTitle()).append(&quot; &quot;);</span>
+        }
+        
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        if (post.getContent() != null) {</span>
+<span class="fc" id="L164">            text.append(post.getContent()).append(&quot; &quot;);</span>
+        }
+        
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        if (post.getMood() != null) {</span>
+<span class="fc" id="L168">            text.append(&quot;心情: &quot;).append(post.getMood().name()).append(&quot; &quot;);</span>
+        }
+        
+<span class="fc bfc" id="L171" title="All 4 branches covered.">        if (post.getTags() != null &amp;&amp; !post.getTags().isEmpty()) {</span>
+<span class="fc" id="L172">            text.append(&quot;标签: &quot;);</span>
+<span class="fc" id="L173">            post.getTags().forEach(tag -&gt; text.append(tag.getId()).append(&quot; &quot;));</span>
+        }
+        
+<span class="fc" id="L176">        return text.toString().trim();</span>
+    }
+
+    /**
+     * 计算余弦相似度
+     */
+    private double cosineSimilarity(List&lt;Float&gt; vector1, List&lt;Float&gt; vector2) {
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        if (vector1.size() != vector2.size()) {</span>
+<span class="nc" id="L184">            return 0.0;</span>
+        }
+
+<span class="nc" id="L187">        double dotProduct = 0.0;</span>
+<span class="nc" id="L188">        double norm1 = 0.0;</span>
+<span class="nc" id="L189">        double norm2 = 0.0;</span>
+
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        for (int i = 0; i &lt; vector1.size(); i++) {</span>
+<span class="nc" id="L192">            dotProduct += vector1.get(i) * vector2.get(i);</span>
+<span class="nc" id="L193">            norm1 += vector1.get(i) * vector1.get(i);</span>
+<span class="nc" id="L194">            norm2 += vector2.get(i) * vector2.get(i);</span>
+        }
+
+<span class="nc bnc" id="L197" title="All 4 branches missed.">        if (norm1 == 0.0 || norm2 == 0.0) {</span>
+<span class="nc" id="L198">            return 0.0;</span>
+        }
+
+<span class="nc" id="L201">        return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

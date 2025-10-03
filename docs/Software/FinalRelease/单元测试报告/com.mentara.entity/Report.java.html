@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Report.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">Report.java</span></div><h1>Report.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = &quot;reports&quot;, uniqueConstraints = {
+    @UniqueConstraint(columnNames = {&quot;user_id&quot;, &quot;post_id&quot;})
+})
+<span class="pc bnc" id="L12" title="All 54 branches missed.">@Data</span>
+public class Report {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="nc" id="L16">    private Long id;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;user_id&quot;, nullable = false)
+<span class="fc" id="L20">    private User user; // 举报人</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;post_id&quot;, nullable = false)
+<span class="nc" id="L24">    private Post post; // 被举报的帖子</span>
+
+    @Column(name = &quot;reason&quot;, length = 500)
+<span class="fc" id="L27">    private String reason; // 举报原因</span>
+
+<span class="fc" id="L29">    @Column(name = &quot;state&quot;)</span>
+<span class="nc" id="L30">    private State state = State.PENDING;</span>
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+<span class="fc" id="L33">    private LocalDateTime createdAt;</span>
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L37">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L38">    }</span>
+
+<span class="fc" id="L40">    public enum State {</span>
+<span class="fc" id="L41">        PENDING,</span>
+<span class="fc" id="L42">        WAITING,</span>
+<span class="fc" id="L43">        VALID,</span>
+<span class="fc" id="L44">        INVALID,</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

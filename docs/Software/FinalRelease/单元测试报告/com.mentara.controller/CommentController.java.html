@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommentController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">CommentController.java</span></div><h1>CommentController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.request.CommentRequest;
+import com.mentara.dto.request.ReportCommentRequest;
+import com.mentara.dto.response.CommentResponse;
+import com.mentara.dto.response.MessageResponse;
+import com.mentara.dto.response.ReportedCommentResponse;
+import com.mentara.security.CurrentUser;
+import com.mentara.security.UserPrincipal;
+import com.mentara.service.CommentService;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@CrossOrigin(origins = &quot;*&quot;, maxAge = 3600)
+@RestController
+@RequestMapping(&quot;&quot;)
+<span class="fc" id="L23">public class CommentController {</span>
+
+    @Autowired
+    private CommentService commentService;
+
+    @PostMapping(&quot;/comments&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ResponseEntity&lt;CommentResponse&gt; createComment(
+        @Valid @RequestBody CommentRequest commentRequest,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L33">        CommentResponse commentResponse = commentService.createComment(commentRequest, currentUser.getId());</span>
+<span class="fc" id="L34">        return ResponseEntity.ok(commentResponse);</span>
+    }
+
+    @GetMapping(&quot;/posts/{postId}/comments&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getCommentsOfPost(
+        @PathVariable Long postId, 
+        @RequestParam(defaultValue = &quot;0&quot;) int page,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L43">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="pc bpc" id="L44" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L45">        Page&lt;CommentResponse&gt; commentResponses = commentService.getCommentsOfPost(postId, pageable, currentUserId);</span>
+<span class="fc" id="L46">        return ResponseEntity.ok(commentResponses);</span>
+    }
+
+    @GetMapping(&quot;/posts/{postId}/comments/last-page&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getLastPageCommentsOfPost(
+        @PathVariable Long postId, 
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="pc bpc" id="L54" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L55">        int page = commentService.calculateLastPageOfPost(postId, size);</span>
+<span class="fc" id="L56">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L57">        Page&lt;CommentResponse&gt; commentResponses = commentService.getCommentsOfPost(postId, pageable, currentUserId);</span>
+<span class="fc" id="L58">        return ResponseEntity.ok(commentResponses);</span>
+    }
+
+    @GetMapping(&quot;/comments/{commentId}&quot;)
+    public ResponseEntity&lt;CommentResponse&gt; getComment(@PathVariable Long commentId, @CurrentUser UserPrincipal currentUser) {
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L64">        CommentResponse commentResponse = commentService.getComment(commentId, currentUserId);</span>
+<span class="fc" id="L65">        return ResponseEntity.ok(commentResponse);</span>
+    }
+
+    @GetMapping(&quot;/comments/{commentId}/replies-to-top-comment&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getRepliesOfTopComment(
+        @PathVariable Long commentId,
+        @RequestParam(defaultValue = &quot;0&quot;) int page,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L74">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L76">        Page&lt;CommentResponse&gt; replies = commentService.getRepliesOfTopComment(commentId, pageable, currentUserId);</span>
+<span class="fc" id="L77">        return ResponseEntity.ok(replies);</span>
+    }
+
+    @GetMapping(&quot;/comments/{commentId}/goto/{parentId}&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getPageOfComment(
+        @PathVariable Long commentId,
+        @PathVariable Long parentId,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L87">        int page = commentService.calculatePageOfReplyInTopComment(parentId, size);</span>
+<span class="fc" id="L88">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L89">        Page&lt;CommentResponse&gt; replies = commentService.getRepliesOfTopComment(commentId, pageable, currentUserId);</span>
+<span class="fc" id="L90">        return ResponseEntity.ok(replies);</span>
+    }
+
+    @GetMapping(&quot;/comments/{commentId}/replies-to-top-comment/last-page&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getLastPageRepliesOfTopComment(
+        @PathVariable Long commentId,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L99">        int page = commentService.calculateLastPageOfTopComment(commentId, size);</span>
+<span class="fc" id="L100">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="fc" id="L101">        Page&lt;CommentResponse&gt; replies = commentService.getRepliesOfTopComment(commentId, pageable, currentUserId);</span>
+<span class="fc" id="L102">        return ResponseEntity.ok(replies);</span>
+    }
+
+    @GetMapping(&quot;/comments/{commentId}/replies&quot;)
+    public ResponseEntity&lt;Page&lt;CommentResponse&gt;&gt; getRepliesOfComment(
+        @PathVariable Long commentId,
+        @RequestParam(defaultValue = &quot;0&quot;) int page,
+        @RequestParam(defaultValue = &quot;10&quot;) int size,
+        @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L111">        Pageable pageable = PageRequest.of(page, size);</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        Long currentUserId = currentUser != null ? currentUser.getId() : null;</span>
+<span class="fc" id="L113">        Page&lt;CommentResponse&gt; replies = commentService.getRepliesOfComment(commentId, pageable, currentUserId);</span>
+<span class="fc" id="L114">        return ResponseEntity.ok(replies);</span>
+    }
+
+    @PostMapping(&quot;/comments/{commentId}/like&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ResponseEntity&lt;?&gt; toggleLikeComment(
+        @PathVariable Long commentId, @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L121">        boolean isLiked = commentService.isCommentLikedByUser(commentId, currentUser.getId());</span>
+
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (isLiked) {</span>
+<span class="fc" id="L124">            commentService.unlikeComment(commentId, currentUser.getId());</span>
+        } else {
+<span class="fc" id="L126">            commentService.likeComment(commentId, currentUser.getId());</span>
+        }
+<span class="fc" id="L128">        return ResponseEntity.ok(new MessageResponse(&quot;操作成功&quot;));</span>
+    }
+
+    @DeleteMapping(&quot;/comments/{commentId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ResponseEntity&lt;?&gt; deleteComment(@PathVariable Long commentId, @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L134">        commentService.deleteComment(commentId, currentUser.getId());</span>
+<span class="fc" id="L135">        return ResponseEntity.ok(new MessageResponse(&quot;操作成功&quot;));</span>
+    }
+
+    @PostMapping(&quot;/comments/{commentId}/report&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ResponseEntity&lt;?&gt; reportComment(
+            @PathVariable Long commentId,
+            @Valid @RequestBody ReportCommentRequest request,
+            @CurrentUser UserPrincipal currentUser) {
+<span class="fc" id="L144">        commentService.reportComment(commentId, currentUser.getId(), request.getReason());</span>
+<span class="fc" id="L145">        return ResponseEntity.ok().body(java.util.Map.of(&quot;message&quot;, &quot;举报成功&quot;));</span>
+    }
+
+
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

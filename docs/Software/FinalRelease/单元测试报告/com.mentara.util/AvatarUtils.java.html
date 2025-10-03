@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AvatarUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.util</a> &gt; <span class="el_source">AvatarUtils.java</span></div><h1>AvatarUtils.java</h1><pre class="source lang-java linenums">package com.mentara.util;
+
+/**
+ * 头像工具类
+ * 用于生成随机默认头像
+ */
+<span class="nc" id="L7">public class AvatarUtils {</span>
+    
+    private static final String AVATAR_BASE_URL = &quot;https://mentara-dev-images.oss-cn-shanghai.aliyuncs.com/avatars/&quot;;
+    private static final String DEFAULT_AVATAR_BASE_URL = &quot;https://mentara-dev-images.oss-cn-shanghai.aliyuncs.com/avatars/default_avatars/default_avatar&quot;;
+    private static final String DEFAULT_AVATAR_EXTENSION = &quot;.jpg&quot;;
+    private static final int TOTAL_DEFAULT_AVATARS = 30;
+    
+    /**
+     * 根据输入字符串生成随机默认头像URL
+     * @param input 输入字符串（如用户ID、学号等）
+     * @return 默认头像URL
+     */
+    public static String generateRandomDefaultAvatar(String input) {
+<span class="pc bpc" id="L20" title="2 of 4 branches missed.">        if (input == null || input.isEmpty()) {</span>
+<span class="nc" id="L21">            input = String.valueOf(System.currentTimeMillis());</span>
+        }
+        
+<span class="fc" id="L24">        int avatarIndex = Math.abs(input.hashCode() % TOTAL_DEFAULT_AVATARS);</span>
+<span class="fc" id="L25">        return DEFAULT_AVATAR_BASE_URL + avatarIndex + DEFAULT_AVATAR_EXTENSION;</span>
+    }
+    
+    /**
+     * 根据用户ID生成随机默认头像URL
+     * @param userId 用户ID
+     * @return 默认头像URL
+     */
+    public static String generateRandomDefaultAvatar(Long userId) {
+<span class="nc" id="L34">        return generateRandomDefaultAvatar(userId.toString());</span>
+    }
+    
+    /**
+     * 获取默认头像URL（当用户已删除时使用）
+     * @return 默认头像URL
+     */
+    public static String getDeletedUserAvatar() {
+<span class="fc" id="L42">        return AVATAR_BASE_URL + &quot;deleted_avatar.jpg&quot;;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

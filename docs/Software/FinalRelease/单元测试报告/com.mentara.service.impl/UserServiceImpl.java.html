@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">UserServiceImpl.java</span></div><h1>UserServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.response.UserProfileResponse;
+import com.mentara.dto.ExpertUserDTO;
+import com.mentara.entity.User;
+import com.mentara.entity.Expert;
+import com.mentara.entity.UserAuth;
+import com.mentara.entity.UserRole;
+import com.mentara.repository.UserRepository;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.repository.PostRepository;
+import com.mentara.repository.PostLikeRepository;
+import com.mentara.repository.CommentRepository;
+import com.mentara.repository.CheckinRepository;
+import com.mentara.repository.NotificationRepository;
+import com.mentara.repository.CommentLikeRepository;
+import com.mentara.repository.AppointmentRepository;
+import com.mentara.service.UserService;
+import com.mentara.util.CryptoUtils;
+import com.mentara.util.AvatarUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.ArrayList;
+
+@Service
+@Transactional
+<span class="fc" id="L36">public class UserServiceImpl implements UserService {</span>
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ExpertRepository expertRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    @Autowired
+    private PostRepository postRepository;
+    
+    @Autowired
+    private PostLikeRepository postLikeRepository;
+    
+    @Autowired
+    private CommentRepository commentRepository;
+    
+    @Autowired
+    private CheckinRepository checkinRepository;
+
+    @Autowired
+    private CryptoUtils cryptoUtils;
+
+    @Override
+    @CacheEvict(value = &quot;users&quot;, allEntries = true)
+    public User save(User user) {
+<span class="fc" id="L65">        return userRepository.save(user);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;users&quot;, key = &quot;#id&quot;)
+    public Optional&lt;User&gt; findById(Long id) {
+<span class="fc" id="L71">        return userRepository.findById(id);</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;users&quot;, key = &quot;'username_' + #username&quot;)
+    public Optional&lt;User&gt; findByUsername(String username) {
+<span class="fc" id="L77">        return userRepository.findByUsername(username);</span>
+    }
+
+    @Override
+    public Optional&lt;User&gt; findByEmail(String email) {
+<span class="fc" id="L82">        return userRepository.findByEmail(email);</span>
+    }
+
+    @Override
+    public boolean existsByUsername(String username) {
+<span class="fc" id="L87">        return userRepository.existsByUsername(username);</span>
+    }
+    
+    @Override
+    public boolean existsByUsernameIncludingDeleted(String username) {
+<span class="fc" id="L92">        return userRepository.existsByUsernameIncludingDeleted(username);</span>
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+<span class="fc" id="L97">        return userRepository.existsByEmail(email);</span>
+    }
+
+    @Override
+    @CacheEvict(value = &quot;users&quot;, allEntries = true)
+    public User updateUser(User user) {
+<span class="fc" id="L103">        return userRepository.save(user);</span>
+    }
+
+    @Override
+    public void deleteUser(Long id) {
+        // 软删除：不删除用户数据，只标记为已删除
+<span class="fc" id="L109">        User user = userRepository.findById(id)</span>
+<span class="fc" id="L110">            .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+        // 标记用户为已删除
+<span class="fc" id="L113">        user.setIsDeleted(true);</span>
+<span class="fc" id="L114">        user.setDeletedAt(LocalDateTime.now());</span>
+        
+        // 保存用户
+<span class="fc" id="L117">        userRepository.save(user);</span>
+<span class="fc" id="L118">    }</span>
+
+    @Override
+    public User updateLastLoginTime(String username) {
+<span class="fc" id="L122">        Optional&lt;User&gt; userOpt = userRepository.findByUsername(username);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L124">            User user = userOpt.get();</span>
+<span class="fc" id="L125">            user.setLastLoginAt(LocalDateTime.now());</span>
+<span class="fc" id="L126">            return userRepository.save(user);</span>
+        }
+<span class="fc" id="L128">        return null;</span>
+    }
+
+    @Override
+    public Optional&lt;User&gt; findByStudentId(String studentId) {
+        // 优化：直接使用哈希后的学号查询，避免全表扫描
+<span class="fc" id="L134">        String hashedStudentId = CryptoUtils.hashStudentId(studentId);</span>
+<span class="fc" id="L135">        return userRepository.findByUsername(hashedStudentId);</span>
+    }
+
+    @Override
+    public boolean existsByStudentId(String studentId) {
+<span class="fc" id="L140">        return findByStudentId(studentId).isPresent();</span>
+    }
+
+    @Override
+    public boolean verifyPassword(String rawPassword, String encodedPassword) {
+<span class="fc" id="L145">        return passwordEncoder.matches(rawPassword, encodedPassword);</span>
+    }
+
+    @Override
+    public User createUser(String studentId, String email, String password, String nickname) {
+<span class="fc" id="L150">        String hashedStudentId = CryptoUtils.hashStudentId(studentId);</span>
+        
+<span class="fc" id="L152">        User user = new User();</span>
+<span class="fc" id="L153">        user.setUsername(hashedStudentId);</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if (nickname != null) {</span>
+<span class="fc" id="L155">            user.setNickname(nickname);</span>
+        }
+
+        // 根据学号生成随机默认头像 (0-29)
+<span class="fc" id="L159">        user.setAvatar(AvatarUtils.generateRandomDefaultAvatar(studentId));</span>
+         
+<span class="fc" id="L161">        UserAuth userAuth = new UserAuth();</span>
+<span class="fc" id="L162">        userAuth.setEmail(email);</span>
+<span class="fc" id="L163">        userAuth.setPassword(passwordEncoder.encode(password));</span>
+        
+<span class="fc" id="L165">        userAuth.setUser(user);</span>
+<span class="fc" id="L166">        user.setUserAuth(userAuth);</span>
+        
+<span class="fc" id="L168">        return userRepository.save(user);</span>
+    }
+
+    @Override
+    public User resetUserPassword(String studentId, String email, String newPassword) {
+<span class="fc" id="L173">        Optional&lt;User&gt; userOpt = findByStudentId(studentId);</span>
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L175">            User user = userOpt.get();</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">            if (email.equals(user.getUserAuth().getEmail())) {</span>
+<span class="fc" id="L177">                user.getUserAuth().setPassword(passwordEncoder.encode(newPassword));</span>
+<span class="fc" id="L178">                return userRepository.save(user);</span>
+            }
+        }
+<span class="fc" id="L181">        return null;</span>
+    }
+    
+    @Override
+    @Cacheable(value = &quot;users&quot;, key = &quot;'profile_' + #userId&quot;)
+    public UserProfileResponse getUserProfileStats(Long userId) {
+<span class="fc" id="L187">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="fc bfc" id="L188" title="All 2 branches covered.">        if (userOpt.isEmpty()) {</span>
+<span class="fc" id="L189">            throw new RuntimeException(&quot;用户不存在&quot;);</span>
+        }
+        
+<span class="fc" id="L192">        User user = userOpt.get();</span>
+        
+        // 获取用户发布的帖子数量
+<span class="fc" id="L195">        Integer postsCount = postRepository.countByAuthorId(userId);</span>
+        
+        // 获取用户获得的总点赞数（用户发布的帖子被点赞的总数）
+<span class="fc" id="L198">        Integer totalLikes = postLikeRepository.countByPostAuthorId(userId);</span>
+        
+        // 获取用户评论数量
+<span class="fc" id="L201">        Integer commentsCount = commentRepository.countByAuthorId(userId);</span>
+        
+        // 获取用户平均心情评分（从打卡记录中计算）
+<span class="fc" id="L204">        Double averageMoodRating = checkinRepository.findAverageRatingByUserId(userId);</span>
+        
+<span class="fc" id="L206">        return UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating);</span>
+    }
+    
+    @Override
+    public void disableUser(Long userId) {
+<span class="fc" id="L211">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L213">            User user = userOpt.get();</span>
+<span class="fc" id="L214">            user.setIsDisabled(true);</span>
+<span class="fc" id="L215">            userRepository.save(user);</span>
+        }
+<span class="fc" id="L217">    }</span>
+    
+    @Override
+    public void enableUser(Long userId) {
+<span class="fc" id="L221">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L223">            User user = userOpt.get();</span>
+<span class="fc" id="L224">            user.setIsDisabled(false);</span>
+<span class="fc" id="L225">            userRepository.save(user);</span>
+        }
+<span class="fc" id="L227">    }</span>
+    
+    @Override
+    public void incrementReportedCount(Long userId) {
+<span class="fc" id="L231">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L233">            User user = userOpt.get();</span>
+<span class="fc" id="L234">            user.setReportedCount(user.getReportedCount() + 1);</span>
+<span class="fc" id="L235">            userRepository.save(user);</span>
+        }
+<span class="fc" id="L237">    }</span>
+    
+    @Override
+    public void decrementReportedCount(Long userId, int count) {
+<span class="fc" id="L241">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L243">            User user = userOpt.get();</span>
+<span class="fc" id="L244">            int newCount = Math.max(0, user.getReportedCount() - count);</span>
+<span class="fc" id="L245">            user.setReportedCount(newCount);</span>
+<span class="fc" id="L246">            userRepository.save(user);</span>
+        }
+<span class="fc" id="L248">    }</span>
+    
+    @Override
+    public long countUsers() {
+<span class="fc" id="L252">        return userRepository.countActiveUsers();</span>
+    }
+    
+    @Override
+    public org.springframework.data.domain.Page&lt;User&gt; searchUsers(String keyword, org.springframework.data.domain.Pageable pageable) {
+<span class="fc" id="L257">        return userRepository.searchUsers(keyword, pageable);</span>
+    }
+    
+    @Override
+    public void softDeleteUser(Long userId) {
+<span class="fc" id="L262">        deleteUser(userId); // 使用已有的软删除实现</span>
+<span class="fc" id="L263">    }</span>
+    
+    @Override
+    public void restoreUser(Long userId) {
+<span class="fc" id="L267">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L268">            .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+<span class="fc" id="L270">        user.setIsDeleted(false);</span>
+<span class="fc" id="L271">        user.setDeletedAt(null);</span>
+<span class="fc" id="L272">        userRepository.save(user);</span>
+<span class="fc" id="L273">    }</span>
+    
+    @Override
+    public boolean isUsernameAvailable(String username) {
+        // 检查是否有未删除的用户使用此用户名
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">        return !userRepository.existsByUsername(username);</span>
+    }
+    
+    @Override
+    public List&lt;User&gt; findByIds(Set&lt;Long&gt; userIds) {
+<span class="pc bpc" id="L283" title="2 of 4 branches missed.">        if (userIds == null || userIds.isEmpty()) {</span>
+<span class="nc" id="L284">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="fc" id="L286">        return userRepository.findByIdIn(userIds);</span>
+    }
+    
+    @Override
+    public void restoreUserWithUsernameCheck(Long userId) {
+<span class="fc" id="L291">        User user = userRepository.findById(userId)</span>
+<span class="pc" id="L292">            .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+        
+        // 检查恢复后是否会造成用户名冲突
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">        if (!user.getIsDeleted()) {</span>
+<span class="nc" id="L296">            throw new RuntimeException(&quot;用户未被删除，无需恢复&quot;);</span>
+        }
+        
+        // 检查是否有其他活跃用户使用相同用户名
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">        if (userRepository.existsByUsername(user.getUsername())) {</span>
+<span class="nc" id="L301">            throw new RuntimeException(&quot;无法恢复用户：用户名已被其他用户使用&quot;);</span>
+        }
+        
+<span class="fc" id="L304">        user.setIsDeleted(false);</span>
+<span class="fc" id="L305">        user.setDeletedAt(null);</span>
+<span class="fc" id="L306">        userRepository.save(user);</span>
+<span class="fc" id="L307">    }</span>
+    
+    @Override
+    public long getActiveUsersCount() {
+<span class="fc" id="L311">        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minus(30, java.time.temporal.ChronoUnit.DAYS);</span>
+        
+        // 由于lastLoginAt可能为null，我们使用createdAt作为fallback
+<span class="fc" id="L314">        return userRepository.findAll().stream()</span>
+<span class="fc" id="L315">            .filter(user -&gt; {</span>
+<span class="fc bfc" id="L316" title="All 2 branches covered.">                LocalDateTime lastActivity = user.getLastLoginAt() != null ? user.getLastLoginAt() : user.getCreatedAt();</span>
+<span class="pc bpc" id="L317" title="1 of 4 branches missed.">                return lastActivity != null &amp;&amp; lastActivity.isAfter(thirtyDaysAgo);</span>
+            })
+<span class="fc" id="L319">            .count();</span>
+    }
+    
+    @Override
+    public long getNewUsersThisMonth() {
+<span class="fc" id="L324">        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);</span>
+<span class="fc" id="L325">        return userRepository.findAll().stream()</span>
+<span class="pc bpc" id="L326" title="1 of 4 branches missed.">            .filter(user -&gt; user.getCreatedAt() != null &amp;&amp; user.getCreatedAt().isAfter(startOfMonth))</span>
+<span class="fc" id="L327">            .count();</span>
+    }
+    
+    @Override
+    public void updateUserRole(Long userId, String role) {
+<span class="fc" id="L332">        Optional&lt;User&gt; userOpt = findById(userId);</span>
+<span class="fc bfc" id="L333" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L334">            User user = userOpt.get();</span>
+            try {
+<span class="fc" id="L336">                UserRole userRole = UserRole.valueOf(role.toUpperCase());</span>
+<span class="fc" id="L337">                user.setRole(userRole);</span>
+<span class="fc" id="L338">                userRepository.save(user);</span>
+<span class="fc" id="L339">            } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L340">                throw new RuntimeException(&quot;无效的角色类型: &quot; + role);</span>
+<span class="fc" id="L341">            }</span>
+<span class="fc" id="L342">        } else {</span>
+<span class="fc" id="L343">            throw new RuntimeException(&quot;用户不存在&quot;);</span>
+        }
+<span class="fc" id="L345">    }</span>
+
+    @Override
+    public List&lt;ExpertUserDTO&gt; getAllExpertUsers() {
+<span class="fc" id="L349">        List&lt;ExpertUserDTO&gt; expertUsers = new ArrayList&lt;&gt;();</span>
+        
+        // 获取所有角色为EXPERT的用户
+<span class="fc" id="L352">        List&lt;User&gt; expertUserList = userRepository.findByRoleAndIsDeletedFalse(UserRole.EXPERT);</span>
+        
+<span class="fc bfc" id="L354" title="All 2 branches covered.">        for (User user : expertUserList) {</span>
+<span class="fc" id="L355">            ExpertUserDTO dto = new ExpertUserDTO();</span>
+            
+            // 设置用户基本信息
+<span class="fc" id="L358">            dto.setUserId(user.getId());</span>
+<span class="fc" id="L359">            dto.setUsername(user.getUsername());</span>
+<span class="fc" id="L360">            dto.setNickname(user.getNickname());</span>
+<span class="fc" id="L361">            dto.setAvatar(user.getAvatar());</span>
+            
+            // 查找对应的专家详细信息
+<span class="fc" id="L364">            Optional&lt;Expert&gt; expertOpt = expertRepository.findByUserId(user.getId());</span>
+<span class="fc bfc" id="L365" title="All 2 branches covered.">            if (expertOpt.isPresent()) {</span>
+<span class="fc" id="L366">                Expert expert = expertOpt.get();</span>
+<span class="fc" id="L367">                dto.setExpertId(expert.getId());</span>
+<span class="fc" id="L368">                dto.setExpertName(expert.getName());</span>
+<span class="fc" id="L369">                dto.setSpecialty(expert.getSpecialty());</span>
+<span class="fc" id="L370">                dto.setContact(expert.getContact());</span>
+<span class="fc" id="L371">                dto.setStatus(expert.getStatus());</span>
+<span class="fc" id="L372">                dto.setHasExpertDetails(true);</span>
+<span class="fc" id="L373">            } else {</span>
+                // 如果没有专家详细信息，使用用户基本信息
+<span class="pc bpc" id="L375" title="1 of 2 branches missed.">                dto.setExpertName(user.getNickname() != null ? user.getNickname() : user.getUsername());</span>
+<span class="fc" id="L376">                dto.setSpecialty(&quot;心理咨询&quot;);</span>
+<span class="fc" id="L377">                dto.setStatus(&quot;online&quot;);</span>
+<span class="fc" id="L378">                dto.setHasExpertDetails(false);</span>
+            }
+            
+<span class="fc" id="L381">            expertUsers.add(dto);</span>
+<span class="fc" id="L382">        }</span>
+        
+<span class="fc" id="L384">        return expertUsers;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

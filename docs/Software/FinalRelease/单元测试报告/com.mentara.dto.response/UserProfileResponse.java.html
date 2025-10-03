@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserProfileResponse.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.dto.response</a> &gt; <span class="el_source">UserProfileResponse.java</span></div><h1>UserProfileResponse.java</h1><pre class="source lang-java linenums"> package com.mentara.dto.response;
+
+import com.mentara.entity.User;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
+<span class="pc bnc" id="L11" title="All 150 branches missed.">@Data</span>
+<span class="fc" id="L12">@NoArgsConstructor</span>
+<span class="nc" id="L13">@AllArgsConstructor</span>
+public class UserProfileResponse {
+<span class="fc" id="L15">    private Long id;</span>
+<span class="fc" id="L16">    private String username;</span>
+<span class="fc" id="L17">    private String nickname;</span>
+<span class="fc" id="L18">    private String avatar;</span>
+<span class="fc" id="L19">    private String gender;</span>
+<span class="fc" id="L20">    private Integer age;</span>
+<span class="fc" id="L21">    private String bio;</span>
+<span class="fc" id="L22">    private String role;</span>
+<span class="fc" id="L23">    private String email;              // 邮箱信息</span>
+<span class="fc" id="L24">    private Boolean isDisabled;        // 是否被禁用</span>
+    
+    // 统计数据
+<span class="fc" id="L27">    private Integer postsCount;        // 发布动态数量</span>
+<span class="fc" id="L28">    private Integer totalLikes;        // 获得点赞数量</span>
+<span class="fc" id="L29">    private Integer joinDays;          // 加入天数</span>
+<span class="fc" id="L30">    private Integer commentsCount;     // 评论数量</span>
+<span class="fc" id="L31">    private Double averageMoodRating;  // 平均心情评分</span>
+<span class="fc" id="L32">    private Integer reportedPostsCount; // 被举报次数（持久化存储）</span>
+    
+    // 时间信息
+<span class="fc" id="L35">    private LocalDateTime createdAt;</span>
+<span class="fc" id="L36">    private LocalDateTime lastLoginAt;</span>
+    
+    public static UserProfileResponse fromUser(User user, Integer postsCount, Integer totalLikes, 
+                                             Integer commentsCount, Double averageMoodRating) {
+<span class="fc" id="L40">        return fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating, 0);</span>
+    }
+    
+    public static UserProfileResponse fromUser(User user, Integer postsCount, Integer totalLikes, 
+                                             Integer commentsCount, Double averageMoodRating, Integer reportedPostsCount) {
+<span class="fc" id="L45">        UserProfileResponse response = new UserProfileResponse();</span>
+<span class="fc" id="L46">        response.setId(user.getId());</span>
+<span class="fc" id="L47">        response.setUsername(user.getUsername());</span>
+<span class="fc" id="L48">        response.setNickname(user.getNickname());</span>
+<span class="fc" id="L49">        response.setAvatar(user.getAvatar());</span>
+<span class="fc" id="L50">        response.setGender(user.getGender());</span>
+<span class="fc" id="L51">        response.setAge(user.getAge());</span>
+<span class="fc" id="L52">        response.setBio(user.getBio());</span>
+<span class="fc" id="L53">        response.setRole(user.getRole().name());</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        response.setEmail(user.getUserAuth() != null ? user.getUserAuth().getEmail() : null);</span>
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        response.setIsDisabled(user.getIsDisabled() != null ? user.getIsDisabled() : false);</span>
+<span class="fc" id="L56">        response.setCreatedAt(user.getCreatedAt());</span>
+<span class="fc" id="L57">        response.setLastLoginAt(user.getLastLoginAt());</span>
+        
+        // 统计数据
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">        response.setPostsCount(postsCount != null ? postsCount : 0);</span>
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        response.setTotalLikes(totalLikes != null ? totalLikes : 0);</span>
+<span class="pc bpc" id="L62" title="1 of 2 branches missed.">        response.setCommentsCount(commentsCount != null ? commentsCount : 0);</span>
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        response.setAverageMoodRating(averageMoodRating != null ? averageMoodRating : 0.0);</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        response.setReportedPostsCount(reportedPostsCount != null ? reportedPostsCount : 0);</span>
+        
+        // 计算加入天数
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        if (user.getCreatedAt() != null) {</span>
+<span class="fc" id="L68">            long days = ChronoUnit.DAYS.between(user.getCreatedAt(), LocalDateTime.now());</span>
+<span class="fc" id="L69">            response.setJoinDays((int) days);</span>
+<span class="fc" id="L70">        } else {</span>
+<span class="fc" id="L71">            response.setJoinDays(0);</span>
+        }
+        
+<span class="fc" id="L74">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

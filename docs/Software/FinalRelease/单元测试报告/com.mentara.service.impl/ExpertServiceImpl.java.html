@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExpertServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">ExpertServiceImpl.java</span></div><h1>ExpertServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.entity.Expert;
+import com.mentara.repository.ExpertRepository;
+import com.mentara.service.ExpertService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+<span class="fc" id="L14">@RequiredArgsConstructor</span>
+public class ExpertServiceImpl implements ExpertService {
+
+    private final ExpertRepository expertRepository;
+
+    @Override
+    @Cacheable(value = &quot;experts&quot;, key = &quot;'all'&quot;)
+    public List&lt;Expert&gt; getAllExperts() {
+<span class="fc" id="L22">        return expertRepository.findAll();</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;experts&quot;, key = &quot;#id&quot;)
+    public Expert getExpertById(Long id) {
+<span class="nc" id="L28">        return expertRepository.findById(id)</span>
+<span class="nc" id="L29">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在&quot;));</span>
+    }
+
+    @Override
+    @Cacheable(value = &quot;experts&quot;, key = &quot;'user_' + #userId&quot;)
+    public Expert getExpertByUserId(Long userId) {
+<span class="fc" id="L35">        return expertRepository.findByUserId(userId)</span>
+<span class="fc" id="L36">                .orElseThrow(() -&gt; new RuntimeException(&quot;专家不存在&quot;));</span>
+    }
+
+    @Override
+    @CacheEvict(value = &quot;experts&quot;, allEntries = true)
+    public Expert addExpert(Expert expert) {
+<span class="nc bnc" id="L42" title="All 4 branches missed.">        if (expert.getName() == null || expert.getName().trim().isEmpty()) {</span>
+<span class="nc" id="L43">            throw new RuntimeException(&quot;专家姓名不能为空&quot;);</span>
+        }
+        
+<span class="nc bnc" id="L46" title="All 4 branches missed.">        if (expert.getStatus() == null || expert.getStatus().trim().isEmpty()) {</span>
+<span class="nc" id="L47">            expert.setStatus(&quot;offline&quot;);</span>
+        }
+        
+<span class="nc" id="L50">        return expertRepository.save(expert);</span>
+    }
+
+    @Override
+    @CacheEvict(value = &quot;experts&quot;, allEntries = true)
+    public Expert updateExpert(Expert expert) {
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">        if (!expertRepository.existsById(expert.getId())) {</span>
+<span class="nc" id="L57">            throw new RuntimeException(&quot;专家不存在&quot;);</span>
+        }
+        
+<span class="pc bpc" id="L60" title="2 of 4 branches missed.">        if (expert.getName() == null || expert.getName().trim().isEmpty()) {</span>
+<span class="nc" id="L61">            throw new RuntimeException(&quot;专家姓名不能为空&quot;);</span>
+        }
+        
+<span class="fc" id="L64">        return expertRepository.save(expert);</span>
+    }
+
+    @Override
+    @CacheEvict(value = &quot;experts&quot;, allEntries = true)
+    public void deleteExpert(Long id) {
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (!expertRepository.existsById(id)) {</span>
+<span class="nc" id="L71">            throw new RuntimeException(&quot;专家不存在&quot;);</span>
+        }
+<span class="nc" id="L73">        expertRepository.deleteById(id);</span>
+<span class="nc" id="L74">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

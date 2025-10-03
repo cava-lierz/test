@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatRoomUserController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">ChatRoomUserController.java</span></div><h1>ChatRoomUserController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.request.ChatRoomUserRequest;
+import com.mentara.dto.response.ChatRoomUserResponse;
+import com.mentara.entity.ChatRoomUser;
+import com.mentara.entity.User;
+import com.mentara.service.ChatRoomUserService;
+import com.mentara.service.FileUploadService;
+import com.mentara.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import com.mentara.security.CurrentUser;
+import com.mentara.security.UserPrincipal;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequestMapping(&quot;/chat-room-user&quot;)
+<span class="fc" id="L22">public class ChatRoomUserController {</span>
+    @Autowired
+    private ChatRoomUserService chatRoomUserService;
+
+    @Autowired
+    private FileUploadService fileUploadService;
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping(&quot;/add&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse addUserToRoom(
+            @RequestBody ChatRoomUserRequest request) {
+<span class="fc" id="L36">        return chatRoomUserService.addUserToRoom(request);</span>
+    }
+
+    @GetMapping(&quot;/room/{chatRoomId}/isInRoom&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public  boolean isInRoom(
+            @PathVariable Long chatRoomId,
+            @CurrentUser UserPrincipal currentUser
+    ){
+<span class="fc" id="L45">        return  chatRoomUserService.isInRoom(chatRoomId, currentUser.getId());</span>
+    }
+
+    @GetMapping(&quot;/room/{chatRoomId}/me&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse getMyRoomUserFromRoom(
+            @PathVariable Long chatRoomId,
+            @CurrentUser UserPrincipal currentUser
+    ){
+<span class="fc" id="L54">        return chatRoomUserService.getUserFromRoom(chatRoomId, currentUser.getId());</span>
+    }
+
+    @PostMapping(&quot;/quitRoom/chatRoomUserId/{chatRoomUserId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public boolean quitRoom(
+            @PathVariable Long chatRoomUserId
+    ){
+        try {
+<span class="fc" id="L63">            chatRoomUserService.quitRoom(chatRoomUserId);</span>
+<span class="fc" id="L64">            return true;</span>
+<span class="fc" id="L65">        } catch (Exception e) {</span>
+<span class="fc" id="L66">            return false;</span>
+        }
+    }
+
+    @PostMapping(&quot;/room/{chatRoomId}/me/uploadAvatar&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse uploadMyAvatar(
+            @RequestParam(&quot;file&quot;) MultipartFile file,
+            @PathVariable Long chatRoomId,
+            @CurrentUser UserPrincipal currentUser
+    ){
+<span class="fc" id="L77">        ChatRoomUser chatRoomUser = chatRoomUserService.getChatRoomUserByByChatRoomIdAndUserId(chatRoomId, currentUser.getId());</span>
+<span class="fc" id="L78">        User user = userService.findById(currentUser.getId())</span>
+<span class="pc" id="L79">                .orElseThrow(() -&gt; new RuntimeException(&quot;用户不存在&quot;));</span>
+
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">        if (chatRoomUser.getDisplayAvatar() != null &amp;&amp;</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            !chatRoomUser.getDisplayAvatar().isEmpty() &amp;&amp;</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">            !chatRoomUser.getDisplayAvatar().equals(user.getAvatar())) {</span>
+<span class="nc" id="L84">            fileUploadService.deleteAvatar(chatRoomUser.getDisplayAvatar());</span>
+        }
+
+<span class="fc" id="L87">        String avatarUrl = fileUploadService.uploadAvatar(file, user.getId());</span>
+<span class="fc" id="L88">        chatRoomUser.setDisplayAvatar(avatarUrl);</span>
+<span class="fc" id="L89">        Integer version = chatRoomUser.getVersion();</span>
+<span class="fc" id="L90">        chatRoomUser.setVersion(version + 1);</span>
+<span class="fc" id="L91">        chatRoomUserService.save(chatRoomUser);</span>
+
+<span class="fc" id="L93">        return chatRoomUserService.getUserFromRoom(chatRoomId, currentUser.getId());</span>
+    }
+
+    @PutMapping(&quot;/room/{chatRoomId}/me/setNickname&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse setMyNickname(
+            @RequestParam(&quot;displayNickname&quot;) String displayNickname,
+            @PathVariable Long chatRoomId,
+            @CurrentUser UserPrincipal currentUser
+    ){
+<span class="fc" id="L103">        ChatRoomUser chatRoomUser = chatRoomUserService.getChatRoomUserByByChatRoomIdAndUserId(chatRoomId, currentUser.getId());</span>
+        
+<span class="fc" id="L105">        chatRoomUser.setDisplayNickname(displayNickname);</span>
+<span class="fc" id="L106">        Integer version = chatRoomUser.getVersion();</span>
+<span class="fc" id="L107">        chatRoomUser.setVersion(version + 1);</span>
+<span class="fc" id="L108">        chatRoomUserService.save(chatRoomUser);</span>
+
+<span class="fc" id="L110">        return chatRoomUserService.getUserFromRoom(chatRoomId, currentUser.getId());</span>
+    }
+
+    @GetMapping(&quot;/room/{chatRoomId}/RoomUser/{roomUserId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse getRoomUserFromRoom(
+            @PathVariable Long chatRoomId,
+            @PathVariable Long roomUserId){
+<span class="fc" id="L118">        return chatRoomUserService.getUserByRoomAndId(chatRoomId, roomUserId);</span>
+    }
+
+    @GetMapping(&quot;/room/{chatRoomId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public List&lt;ChatRoomUserResponse&gt; getUsersByRoom(
+            @PathVariable Long chatRoomId) {
+<span class="fc" id="L125">        return chatRoomUserService.getUsersByRoom(chatRoomId);</span>
+    }
+
+    @PostMapping(&quot;/join/{chatRoomId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ChatRoomUserResponse joinRoom(
+            @PathVariable Long chatRoomId,
+            @CurrentUser UserPrincipal userPrincipal) {
+<span class="fc" id="L133">        return chatRoomUserService.joinRoom(chatRoomId, userPrincipal.getId());</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

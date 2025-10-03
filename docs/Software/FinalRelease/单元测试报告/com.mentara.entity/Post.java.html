@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Post.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">Post.java</span></div><h1>Post.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.mentara.enums.MoodType;
+import com.mentara.enums.PostState;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Entity
+<span class="pc bnc" id="L14" title="All 150 branches missed.">@Data</span>
+@Table(name = &quot;posts&quot;, indexes = {
+    @Index(name = &quot;idx_posts_created_at&quot;, columnList = &quot;created_at DESC&quot;),
+    @Index(name = &quot;idx_posts_author_created&quot;, columnList = &quot;author_id, created_at DESC&quot;),
+    @Index(name = &quot;idx_posts_state_deleted_created&quot;, columnList = &quot;state, is_deleted, created_at DESC&quot;),
+    @Index(name = &quot;idx_posts_state_deleted_likes&quot;, columnList = &quot;state, is_deleted, likes_count DESC&quot;),
+    @Index(name = &quot;idx_posts_author_state_deleted&quot;, columnList = &quot;author_id, state, is_deleted, created_at DESC&quot;),
+})
+public class Post {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="fc" id="L25">    private Long id;</span>
+
+    @NotBlank(message = &quot;标题不能为空&quot;)
+    @Column(name = &quot;title&quot;, nullable = false)
+<span class="fc" id="L29">    private String title;</span>
+
+    @NotBlank(message = &quot;内容不能为空&quot;)
+    @Column(columnDefinition = &quot;TEXT&quot;)
+<span class="fc" id="L33">    private String content;</span>
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = &quot;mood&quot;, nullable = true)
+<span class="fc" id="L37">    private MoodType mood; // 心情枚举，公告帖子可为空</span>
+
+<span class="fc" id="L39">    @Enumerated(EnumType.STRING)</span>
+    @Column(name = &quot;state&quot;)
+<span class="fc" id="L41">    private PostState state = PostState.PENDING;</span>
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = &quot;post_tags&quot;, 
+        joinColumns = @JoinColumn(name = &quot;post_id&quot;), 
+        inverseJoinColumns = @JoinColumn(name = &quot;tag_id&quot;),
+        indexes = {
+            @Index(name = &quot;idx_post_tags_post_id&quot;, columnList = &quot;post_id&quot;),
+            @Index(name = &quot;idx_post_tags_tag_id&quot;, columnList = &quot;tag_id&quot;),
+        }
+    )
+    @OrderBy(&quot;id ASC&quot;)
+    @JsonIgnore
+<span class="fc" id="L55">    private List&lt;PostTag&gt; tags;</span>
+
+
+    @ElementCollection
+    @CollectionTable(
+        name = &quot;post_images&quot;,
+        joinColumns = @JoinColumn(name = &quot;post_id&quot;))
+    @Column(name = &quot;image_url&quot;)
+    @OrderColumn(name = &quot;image_order&quot;)
+<span class="fc" id="L64">    private List&lt;String&gt; imageUrls;</span>
+
+<span class="fc" id="L66">    @Column(name = &quot;likes_count&quot;)</span>
+<span class="fc" id="L67">    private Integer likesCount = 0;</span>
+    
+<span class="fc" id="L69">    @Column(name = &quot;comments_count&quot;)</span>
+<span class="fc" id="L70">    private Integer commentsCount = 0;</span>
+
+<span class="fc" id="L72">    @Column(name = &quot;report_count&quot;, nullable = false)</span>
+<span class="fc" id="L73">    private Integer reportCount = 0;</span>
+
+<span class="fc" id="L75">    @Column(name = &quot;is_deleted&quot;, nullable = false)</span>
+<span class="fc" id="L76">    private Boolean isDeleted = false;</span>
+
+    @Column(name = &quot;deleted_at&quot;)
+<span class="nc" id="L79">    private LocalDateTime deletedAt;</span>
+
+    @Column(name = &quot;deleted_by&quot;)
+<span class="nc" id="L82">    private Long deletedBy; // 删除操作的用户ID</span>
+
+    @Column(name = &quot;delete_reason&quot;)
+<span class="nc" id="L85">    private String deleteReason; // 删除原因</span>
+
+<span class="fc" id="L87">    @Column(name = &quot;is_announcement&quot;, nullable = false)</span>
+<span class="fc" id="L88">    private Boolean isAnnouncement = false;</span>
+
+    @Column(name = &quot;created_at&quot;, nullable = false, updatable = false)
+<span class="fc" id="L91">    private LocalDateTime createdAt;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;author_id&quot;, nullable = false)
+    @JsonIgnore
+<span class="fc" id="L96">    private User author;</span>
+
+    // 移除关联关系，避免循环查询
+    // 评论关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;post&quot;, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;Comment&gt; comments;
+
+    // 移除关联关系，避免循环查询
+    // 点赞关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;post&quot;, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;PostLike&gt; likes;
+
+    // 关联的心情评分记录
+    @OneToOne(mappedBy = &quot;post&quot;, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({&quot;hibernateLazyInitializer&quot;, &quot;handler&quot;})
+<span class="nc" id="L113">    private MoodScore moodScore;</span>
+
+    // 移除关联关系，避免循环查询
+    // 举报关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;post&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;Report&gt; reports;
+
+    // 移除关联关系，避免循环查询
+    // 通知关系通过Repository查询，而不是实体关联
+    // @OneToMany(mappedBy = &quot;post&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;PostLikeNotification&gt; postLikeNotifications;
+
+    // @OneToMany(mappedBy = &quot;post&quot;, orphanRemoval = true, fetch = FetchType.LAZY)
+    // @JsonIgnore
+    // private List&lt;PostReplyNotification&gt; postReplyNotifications;
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L133">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L134">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

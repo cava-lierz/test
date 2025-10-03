@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DepressCheckService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service</a> &gt; <span class="el_source">DepressCheckService.java</span></div><h1>DepressCheckService.java</h1><pre class="source lang-java linenums">package com.mentara.service;
+
+import com.mentara.dto.response.DepressCheckResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 抑郁检查服务
+ * 调用Python微服务进行抑郁倾向检查
+ */
+<span class="fc" id="L20">@Slf4j</span>
+@Service
+public class DepressCheckService {
+
+    private final WebClient webClient;
+    
+    @Value(&quot;${python.microservice.url:http://localhost:8000}&quot;)
+    private String pythonServiceUrl;
+    
+    @Value(&quot;${python.microservice.depress.endpoint:/depress_check}&quot;)
+    private String depressEndpoint;
+    
+    @Value(&quot;${python.microservice.timeout:10000}&quot;)
+    private int timeout;
+
+    @Autowired
+<span class="fc" id="L36">    public DepressCheckService(WebClient webClient) {</span>
+<span class="fc" id="L37">        this.webClient = webClient;</span>
+<span class="fc" id="L38">    }</span>
+
+    /**
+     * 检查文本的抑郁倾向
+     * 
+     * @param text 需要检查的文本
+     * @param checkType 检查类型（可选）
+     * @return 抑郁检查结果，包含label和score，如果失败返回null
+     */
+    public DepressCheckResponse checkDepress(String text, String checkType) {
+        try {
+<span class="fc" id="L49">            log.info(&quot;开始检查抑郁倾向，文本长度: {}&quot;, text.length());</span>
+            
+<span class="fc" id="L51">            Map&lt;String, Object&gt; requestBody = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L52">            requestBody.put(&quot;text&quot;, text);</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">            if (checkType != null) {</span>
+<span class="fc" id="L54">                requestBody.put(&quot;check_type&quot;, checkType);</span>
+            }
+            
+<span class="fc" id="L57">            String fullUrl = pythonServiceUrl + depressEndpoint;</span>
+            
+<span class="fc" id="L59">            Map&lt;String, Object&gt; response = webClient.post()</span>
+<span class="fc" id="L60">                    .uri(fullUrl)</span>
+<span class="fc" id="L61">                    .contentType(MediaType.APPLICATION_JSON)</span>
+<span class="fc" id="L62">                    .bodyValue(requestBody)</span>
+<span class="fc" id="L63">                    .retrieve()</span>
+<span class="fc" id="L64">                    .bodyToMono(Map.class)</span>
+<span class="fc" id="L65">                    .timeout(java.time.Duration.ofMillis(timeout))</span>
+<span class="fc" id="L66">                    .block();</span>
+            
+<span class="pc bpc" id="L68" title="3 of 6 branches missed.">            if (response != null &amp;&amp; response.containsKey(&quot;score&quot;) &amp;&amp; response.containsKey(&quot;label&quot;)) {</span>
+<span class="fc" id="L69">                Double score = (Double) response.get(&quot;score&quot;);</span>
+<span class="fc" id="L70">                Integer label = (Integer) response.get(&quot;label&quot;);</span>
+<span class="fc" id="L71">                log.info(&quot;抑郁倾向检查成功，得分: {}, 标签: {}&quot;, score, label);</span>
+<span class="fc" id="L72">                return new DepressCheckResponse(label, score);</span>
+            } else {
+<span class="nc" id="L74">                log.error(&quot;Python微服务返回无效响应: {}&quot;, response);</span>
+<span class="nc" id="L75">                return null;</span>
+            }
+            
+<span class="nc" id="L78">        } catch (WebClientResponseException e) {</span>
+<span class="nc" id="L79">            log.error(&quot;调用Python微服务失败，状态码: {}, 错误信息: {}&quot;, e.getStatusCode(), e.getMessage());</span>
+<span class="nc" id="L80">            return null;</span>
+            
+<span class="fc" id="L82">        } catch (Exception e) {</span>
+<span class="fc" id="L83">            log.error(&quot;抑郁倾向检查过程中发生异常&quot;, e);</span>
+<span class="fc" id="L84">            return null;</span>
+        }
+    }
+
+    /**
+     * 检查文本的抑郁倾向（简化版本，不指定检查类型）
+     * 
+     * @param text 需要检查的文本
+     * @return 抑郁检查结果，包含label和score，如果失败返回null
+     */
+    public DepressCheckResponse checkDepress(String text) {
+<span class="fc" id="L95">        return checkDepress(text, null);</span>
+    }
+
+    /**
+     * 健康检查 - 检查Python微服务是否可用
+     */
+    public Mono&lt;Boolean&gt; healthCheck() {
+<span class="fc" id="L102">        String healthUrl = pythonServiceUrl + &quot;/health&quot;;</span>
+<span class="fc" id="L103">        return webClient.get()</span>
+<span class="fc" id="L104">                .uri(healthUrl)</span>
+<span class="fc" id="L105">                .retrieve()</span>
+<span class="fc" id="L106">                .toBodilessEntity()</span>
+<span class="pc" id="L107">                .map(response -&gt; true)</span>
+<span class="fc" id="L108">                .onErrorReturn(false);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

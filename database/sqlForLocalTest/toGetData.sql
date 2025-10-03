@@ -1,0 +1,12 @@
+use mentara;
+-- select * from users;
+-- select * from user_auths;
+-- select * from tags;
+-- select * from reports;
+-- select * from posts;
+-- select * from post_tags;
+-- select * from post_likes;
+-- select * from notifications;
+-- select * from comments;
+-- select * from comment_likes;
+-- select * from checkins;

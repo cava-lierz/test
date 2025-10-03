@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostState.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.enums</a> &gt; <span class="el_source">PostState.java</span></div><h1>PostState.java</h1><pre class="source lang-java linenums">package com.mentara.enums;
+
+/**
+ * Post状态枚举
+ */
+<span class="fc" id="L6">public enum PostState {</span>
+<span class="fc" id="L7">    PENDING(&quot;待审核&quot;),      // 刚创建，等待AI审核</span>
+<span class="fc" id="L8">    WAITING(&quot;等待人工审核&quot;),  // AI审核后需要人工审核</span>
+<span class="fc" id="L9">    VALID(&quot;已通过&quot;),        // 审核通过，正常显示</span>
+<span class="fc" id="L10">    INVALID(&quot;已拒绝&quot;);      // 审核不通过，不显示</span>
+    
+    private final String displayName;
+    
+<span class="fc" id="L14">    PostState(String displayName) {</span>
+<span class="fc" id="L15">        this.displayName = displayName;</span>
+<span class="fc" id="L16">    }</span>
+    
+    public String getDisplayName() {
+<span class="nc" id="L19">        return displayName;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

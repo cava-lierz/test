@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LlmChatServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">LlmChatServiceImpl.java</span></div><h1>LlmChatServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.document.LlmMessageDocument;
+import com.mentara.document.LlmSessionDocument;
+import com.mentara.dto.response.LlmJsonResponse;
+import com.mentara.entity.User;
+import com.mentara.enums.ChatType;
+import com.mentara.repository.LlmMessageRepository;
+import com.mentara.repository.LlmSessionRepository;
+import com.mentara.repository.UserRepository;
+import com.mentara.service.LlmChatService;
+import com.mentara.service.DeepSeekService;
+import com.mentara.security.UserPrincipal;
+import com.mentara.service.LlmSessionInitService;
+import com.mentara.util.PromptManager;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * LLM历史记录服务实现类
+ */
+<span class="fc" id="L30">@Slf4j</span>
+@Service
+<span class="fc" id="L32">public class LlmChatServiceImpl implements LlmChatService {</span>
+    @Autowired
+    private LlmMessageRepository llmMessageRepository;
+    
+    @Autowired
+    private LlmSessionRepository llmSessionRepository;
+    
+    @Autowired
+    private DeepSeekService deepSeekService;
+
+    @Autowired
+    private LlmSessionInitService llmSessionInitService;
+    
+    @Autowired
+    private PromptManager promptManager;
+    @Autowired
+    private LlmSessionInitServiceImpl llmSessionInitServiceImpl;
+
+    @Override
+    public List&lt;LlmSessionDocument&gt; fetchSessions(UserPrincipal currentUser) {
+<span class="fc" id="L52">        log.info(&quot;获取用户 {} 的所有会话&quot;, currentUser.getUsername());</span>
+        
+        try {
+<span class="fc" id="L55">            List&lt;LlmSessionDocument&gt; sessions = llmSessionRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());</span>
+<span class="fc" id="L56">            log.info(&quot;找到 {} 个会话&quot;, sessions.size());</span>
+<span class="fc" id="L57">            return sessions;</span>
+<span class="nc" id="L58">        } catch (Exception e) {</span>
+<span class="nc" id="L59">            log.error(&quot;获取会话列表失败: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L60">            return new ArrayList&lt;&gt;();</span>
+        }
+    }
+
+    @Override
+    public List&lt;LlmMessageDocument&gt; getMessages(String sessionId, UserPrincipal currentUser) {
+<span class="fc" id="L66">        log.info(&quot;获取用户 {} 会话 {} 的消息历史&quot;, currentUser.getUsername(), sessionId);</span>
+        
+        try {
+            // 验证会话是否属于当前用户
+<span class="fc" id="L70">            LlmSessionDocument session = llmSessionRepository.findByUserIdAndSessionId(currentUser.getId(), sessionId);</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            if (session == null) {</span>
+<span class="fc" id="L72">                log.warn(&quot;会话 {} 不属于用户 {}&quot;, sessionId, currentUser.getUsername());</span>
+<span class="fc" id="L73">                return new ArrayList&lt;&gt;();</span>
+            }
+            
+            // 根据会话ID获取消息历史
+<span class="fc" id="L77">            List&lt;LlmMessageDocument&gt; messages = llmMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);</span>
+<span class="fc" id="L78">            log.info(&quot;找到 {} 条消息记录&quot;, messages.size());</span>
+<span class="fc" id="L79">            return messages;</span>
+<span class="nc" id="L80">        } catch (Exception e) {</span>
+<span class="nc" id="L81">            log.error(&quot;获取消息历史失败: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L82">            return new ArrayList&lt;&gt;();</span>
+        }
+    }
+
+    @Override
+    public LlmMessageDocument sendMessage(String message, String sessionId, UserPrincipal currentUser) {
+<span class="fc" id="L88">        log.info(&quot;用户 {} 发送消息到会话 {}&quot;, currentUser.getUsername(), sessionId);</span>
+        
+        try {
+            // 验证会话是否属于当前用户
+<span class="fc" id="L92">            LlmSessionDocument session = llmSessionRepository.findByUserIdAndSessionId(currentUser.getId(), sessionId);</span>
+<span class="fc bfc" id="L93" title="All 2 branches covered.">            if (session == null) {</span>
+<span class="fc" id="L94">                log.warn(&quot;会话 {} 不属于用户 {}&quot;, sessionId, currentUser.getUsername());</span>
+<span class="fc" id="L95">                throw new RuntimeException(&quot;会话不存在或不属于当前用户&quot;);</span>
+            }
+            
+            // 检查会话是否已被标记为敏感
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if (session.getIsSensitive()) {</span>
+<span class="nc" id="L100">                log.warn(&quot;会话 {} 已被标记为敏感，拒绝处理新消息&quot;, sessionId);</span>
+                // 返回提醒消息
+<span class="nc" id="L102">                LlmMessageDocument reminderMessage = new LlmMessageDocument();</span>
+<span class="nc" id="L103">                reminderMessage.setSessionId(sessionId);</span>
+<span class="nc" id="L104">                reminderMessage.setRole(&quot;assistant&quot;);</span>
+<span class="nc" id="L105">                reminderMessage.setContent(&quot;由于检测到不当内容，此会话已被暂停。请保持文明用语，如有需要可以创建新的会话。&quot;);</span>
+<span class="nc" id="L106">                reminderMessage.setCreatedAt(LocalDateTime.now());</span>
+<span class="nc" id="L107">                return llmMessageRepository.save(reminderMessage);</span>
+            }
+            
+            // 创建用户消息记录
+<span class="fc" id="L111">            LlmMessageDocument userMessage = new LlmMessageDocument();</span>
+<span class="fc" id="L112">            userMessage.setSessionId(sessionId);</span>
+<span class="fc" id="L113">            userMessage.setRole(&quot;user&quot;);</span>
+<span class="fc" id="L114">            userMessage.setContent(message);</span>
+<span class="fc" id="L115">            llmMessageRepository.save(userMessage);</span>
+            
+            // 获取会话的所有消息用于上下文
+<span class="fc" id="L118">            List&lt;LlmMessageDocument&gt; sessionMessages = llmMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);</span>
+            
+            // 生成LLM响应
+<span class="fc" id="L121">            String llmResponse = generateLlmResponse(sessionMessages, session.getModel(), session.getChatType());</span>
+            
+            // 解析JSON响应
+<span class="fc" id="L124">            LlmJsonResponse jsonResponse = deepSeekService.parseJsonResponse(llmResponse);</span>
+            
+            // 检查是否检测到敏感内容
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">            if (jsonResponse.getSensitive()) {</span>
+<span class="nc" id="L128">                log.warn(&quot;检测到敏感内容，标记会话 {} 为敏感&quot;, sessionId);</span>
+                // 更新会话状态为敏感
+<span class="nc" id="L130">                session.setIsSensitive(true);</span>
+<span class="nc" id="L131">                session.setSensitiveType(&quot;用户消息包含不当内容&quot;);</span>
+<span class="nc" id="L132">                llmSessionRepository.save(session);</span>
+                
+                // 返回敏感提醒消息
+<span class="nc" id="L135">                LlmMessageDocument sensitiveMessage = new LlmMessageDocument();</span>
+<span class="nc" id="L136">                sensitiveMessage.setSessionId(sessionId);</span>
+<span class="nc" id="L137">                sensitiveMessage.setRole(&quot;assistant&quot;);</span>
+<span class="nc" id="L138">                sensitiveMessage.setContent(&quot;检测到不当内容，此会话已被暂停。请保持文明用语，如有需要可以创建新的会话。&quot;);</span>
+<span class="nc" id="L139">                sensitiveMessage.setCreatedAt(LocalDateTime.now());</span>
+<span class="nc" id="L140">                return llmMessageRepository.save(sensitiveMessage);</span>
+            }
+            
+            // 创建正常的LLM响应记录
+<span class="fc" id="L144">            LlmMessageDocument llmMessage = new LlmMessageDocument();</span>
+<span class="fc" id="L145">            llmMessage.setSessionId(sessionId);</span>
+<span class="fc" id="L146">            llmMessage.setRole(&quot;assistant&quot;);</span>
+<span class="fc" id="L147">            llmMessage.setContent(jsonResponse.getContent());</span>
+<span class="fc" id="L148">            llmMessage.setCreatedAt(LocalDateTime.now());</span>
+            
+            // 保存LLM响应
+<span class="fc" id="L151">            LlmMessageDocument savedLlmMessage = llmMessageRepository.save(llmMessage);</span>
+            
+<span class="fc" id="L153">            log.info(&quot;LLM响应已保存，消息ID: {}&quot;, savedLlmMessage.getId());</span>
+            
+<span class="fc" id="L155">            return savedLlmMessage;</span>
+<span class="fc" id="L156">        } catch (Exception e) {</span>
+<span class="fc" id="L157">            log.error(&quot;发送聊天消息失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L158">            throw new RuntimeException(&quot;发送消息失败&quot;, e);</span>
+        }
+    }
+
+    @Override
+    public List&lt;LlmMessageDocument&gt; clearLlmMemory(String sessionId, UserPrincipal currentUser) {
+<span class="fc" id="L164">        log.info(&quot;用户 {} 清除会话 {} 的聊天历史&quot;, currentUser.getUsername(), sessionId);</span>
+        
+        try {
+            // 验证会话是否属于当前用户
+<span class="fc" id="L168">            LlmSessionDocument session = llmSessionRepository.findByUserIdAndSessionId(currentUser.getId(), sessionId);</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">            if (session == null) {</span>
+<span class="fc" id="L170">                log.warn(&quot;会话 {} 不属于用户 {}&quot;, sessionId, currentUser.getUsername());</span>
+<span class="fc" id="L171">                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;用户与session不匹配&quot;);</span>
+            }
+            
+            // 删除指定会话的所有消息
+<span class="fc" id="L175">            llmMessageRepository.deleteBySessionId(sessionId);</span>
+            
+            // 重置会话的敏感状态
+<span class="fc" id="L178">            session.setIsSensitive(false);</span>
+<span class="fc" id="L179">            session.setSensitiveType(null);</span>
+<span class="fc" id="L180">            llmSessionRepository.save(session);</span>
+            
+<span class="fc" id="L182">            List&lt;LlmMessageDocument&gt; clearedMessages = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L183">            clearedMessages.add(llmSessionInitServiceImpl.createDefaultMessage(session, session.getChatType()));</span>
+<span class="fc" id="L184">            log.info(&quot;会话 {} 消息清除成功&quot;, sessionId);</span>
+<span class="fc" id="L185">            return clearedMessages;</span>
+<span class="fc" id="L186">        } catch (Exception e) {</span>
+<span class="fc" id="L187">            log.error(&quot;清除会话 {} 失败: {}&quot;, sessionId, e.getMessage());</span>
+<span class="fc" id="L188">            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, &quot;服务器清除失败&quot;);</span>
+        }
+    }
+    
+
+    
+    /**
+     * 生成LLM响应（调用DeepSeek API）
+     */
+    private String generateLlmResponse(List&lt;LlmMessageDocument&gt; messages, String model, ChatType chatType) {
+        try {
+            
+            // 构建对话历史
+<span class="fc" id="L201">            StringBuilder conversation = new StringBuilder();</span>
+<span class="fc bfc" id="L202" title="All 2 branches covered.">            for (LlmMessageDocument msg : messages) {</span>
+<span class="fc" id="L203">                conversation.append(msg.getRole()).append(&quot;: &quot;).append(msg.getContent()).append(&quot;\n&quot;);</span>
+<span class="fc" id="L204">            }</span>
+            
+            // 根据聊天类型构建完整的提示词
+            String fullPrompt;
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">            if (chatType != null) {</span>
+<span class="fc" id="L209">                fullPrompt = promptManager.buildFullPrompt(chatType, conversation.toString());</span>
+<span class="fc" id="L210">                log.info(&quot;使用聊天类型: {} 的提示词&quot;, chatType);</span>
+            } else {
+                // 默认使用朋友类型的提示词
+<span class="nc" id="L213">                fullPrompt = promptManager.buildFullPrompt(com.mentara.enums.ChatType.friend, conversation.toString());</span>
+<span class="nc" id="L214">                log.info(&quot;使用默认朋友类型的提示词&quot;);</span>
+            }
+            
+<span class="fc" id="L217">            System.out.println(&quot;完整提示词: &quot; + fullPrompt);</span>
+            
+            // 调用DeepSeek API
+<span class="fc" id="L220">            return deepSeekService.generateResponse(fullPrompt, model);</span>
+            
+<span class="nc" id="L222">        } catch (Exception e) {</span>
+<span class="nc" id="L223">            log.error(&quot;调用DeepSeek API失败&quot;, e);</span>
+<span class="nc" id="L224">            return &quot;{\&quot;content\&quot;: \&quot;抱歉，我暂时无法回应您的问题，请稍后再试。\&quot;, \&quot;sensitive\&quot;: false}&quot;;</span>
+        }
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

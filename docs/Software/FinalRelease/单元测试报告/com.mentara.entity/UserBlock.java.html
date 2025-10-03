@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserBlock.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.entity</a> &gt; <span class="el_source">UserBlock.java</span></div><h1>UserBlock.java</h1><pre class="source lang-java linenums">package com.mentara.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+<span class="nc bnc" id="L11" title="All 46 branches missed.">@Data</span>
+<span class="fc" id="L12">@NoArgsConstructor</span>
+<span class="nc" id="L13">@AllArgsConstructor</span>
+@Table(name = &quot;user_blocks&quot;, uniqueConstraints = {
+    @UniqueConstraint(columnNames = {&quot;blocker_id&quot;, &quot;blocked_id&quot;})
+    }, 
+    indexes = {
+        @Index(name = &quot;idx_user_blocks_blocker_blocked&quot;, columnList = &quot;blocker_id, blocked_id&quot;),
+        @Index(name = &quot;idx_user_blocks_blocked_blocker&quot;, columnList = &quot;blocked_id, blocker_id&quot;)
+    }
+)
+public class UserBlock {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="nc" id="L25">    private Long id;</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;blocker_id&quot;, nullable = false)
+<span class="nc" id="L29">    private User blocker; // 拉黑者</span>
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = &quot;blocked_id&quot;, nullable = false)
+<span class="nc" id="L33">    private User blocked; // 被拉黑者</span>
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+<span class="nc" id="L36">    private LocalDateTime createdAt;</span>
+
+    @Column(name = &quot;reason&quot;, length = 500)
+<span class="nc" id="L39">    private String reason; // 拉黑原因</span>
+
+    @PrePersist
+    protected void onCreate() {
+<span class="fc" id="L43">        createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L44">    }</span>
+
+    // 构造函数
+<span class="fc" id="L47">    public UserBlock(User blocker, User blocked, String reason) {</span>
+<span class="fc" id="L48">        this.blocker = blocker;</span>
+<span class="fc" id="L49">        this.blocked = blocked;</span>
+<span class="fc" id="L50">        this.reason = reason;</span>
+<span class="fc" id="L51">    }</span>
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

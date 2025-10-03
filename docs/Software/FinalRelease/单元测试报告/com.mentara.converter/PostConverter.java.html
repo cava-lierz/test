@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostConverter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.converter</a> &gt; <span class="el_source">PostConverter.java</span></div><h1>PostConverter.java</h1><pre class="source lang-java linenums">package com.mentara.converter;
+
+import com.mentara.dto.response.PostResponse;
+import com.mentara.entity.Post;
+import com.mentara.entity.User;
+import com.mentara.util.AvatarUtils;
+import org.springframework.stereotype.Component;
+
+
+@Component
+<span class="fc" id="L11">public class PostConverter {</span>
+    public PostResponse toResponse(Post post, boolean isLiked) {
+<span class="fc" id="L13">        User author = post.getAuthor();</span>
+        
+        // 处理已删除用户的情况
+<span class="fc" id="L16">        String authorNickname = author.getNickname();</span>
+<span class="fc" id="L17">        String authorAvatar = author.getAvatar();</span>
+<span class="fc" id="L18">        String authorRole = author.getRole().name();</span>
+        
+        // 如果用户已删除，使用默认值
+<span class="pc bpc" id="L21" title="2 of 4 branches missed.">        if (author.getIsDeleted() != null &amp;&amp; author.getIsDeleted()) {</span>
+<span class="nc" id="L22">            authorNickname = &quot;已删除用户&quot;;</span>
+<span class="nc" id="L23">            authorAvatar = AvatarUtils.getDeletedUserAvatar();</span>
+<span class="nc" id="L24">            authorRole = &quot;USER&quot;; // 已删除用户显示为普通用户</span>
+        }
+    
+<span class="fc" id="L27">        PostResponse response = PostResponse.builder()</span>
+<span class="fc" id="L28">                .id(post.getId())</span>
+<span class="fc" id="L29">                .title(post.getTitle())</span>
+<span class="fc" id="L30">                .content(post.getContent())</span>
+<span class="fc" id="L31">                .mood(post.getMood())</span>
+<span class="fc" id="L32">                .tags(post.getTags())</span>
+<span class="fc" id="L33">                .imageUrls(post.getImageUrls())</span>
+<span class="fc" id="L34">                .likesCount(post.getLikesCount())</span>
+<span class="fc" id="L35">                .commentsCount(post.getCommentsCount())</span>
+<span class="fc" id="L36">                .createdAt(post.getCreatedAt())</span>
+<span class="fc" id="L37">                .authorId(author.getId())</span>
+<span class="fc" id="L38">                .authorNickname(authorNickname)</span>
+<span class="fc" id="L39">                .authorAvatar(authorAvatar)</span>
+<span class="fc" id="L40">                .isLiked(isLiked)</span>
+<span class="fc" id="L41">                .isAnnouncement(post.getIsAnnouncement())</span>
+<span class="fc" id="L42">                .authorRole(authorRole)</span>
+<span class="fc" id="L43">                .build();</span>
+<span class="fc" id="L44">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

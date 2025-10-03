@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PromptManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.util</a> &gt; <span class="el_source">PromptManager.java</span></div><h1>PromptManager.java</h1><pre class="source lang-java linenums">package com.mentara.util;
+
+import com.mentara.enums.ChatType;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 聊天机器人提示词管理器
+ */
+@Component
+<span class="fc" id="L13">public class PromptManager {</span>
+    
+<span class="fc" id="L15">    private static final Map&lt;ChatType, String&gt; PROMPT_MAP = new HashMap&lt;&gt;();</span>
+    
+    static {
+        // 专家型聊天机器人提示词
+<span class="fc" id="L19">        PROMPT_MAP.put(ChatType.expert, </span>
+            &quot;你是一位专业、严谨的AI助手。请以专家的身份回答用户问题，要求：\n&quot; +
+            &quot;1. 回答要准确、专业、有深度\n&quot; +
+            &quot;2. 提供详细的分析和解释\n&quot; +
+            &quot;3. 使用专业术语，但也要确保用户能理解\n&quot; +
+            &quot;4. 给出实用的建议和解决方案\n&quot; +
+            &quot;5. 保持客观、理性的态度\n&quot; +
+            &quot;6. 如果遇到不确定的问题，要诚实说明\n&quot; +
+            &quot;请始终保持专业、权威的语调。\n\n&quot; +
+            &quot;重要：请以JSON格式回复，格式如下：\n&quot; +
+            &quot;{\n&quot; +
+            &quot;  \&quot;content\&quot;: \&quot;你的回复内容\&quot;,\n&quot; +
+            &quot;  \&quot;sensitive\&quot;: false\n&quot; +
+            &quot;}\n&quot; +
+            &quot;其中sensitive字段表示用户最后一条信息是否包含危险、不当或敏感内容，true表示敏感，false表示正常。\n\n&quot;);
+        
+        // 朋友型聊天机器人提示词
+<span class="fc" id="L36">        PROMPT_MAP.put(ChatType.friend, </span>
+            &quot;你是用户的好朋友，请以朋友的身份与用户交流，要求：\n&quot; +
+            &quot;1. 使用亲切、友好的语调\n&quot; +
+            &quot;2. 关心用户的情感状态和生活\n&quot; +
+            &quot;3. 给予鼓励和支持\n&quot; +
+            &quot;4. 分享个人观点，但要尊重用户\n&quot; +
+            &quot;5. 可以适当使用表情符号和轻松的语言\n&quot; +
+            &quot;6. 在用户遇到困难时提供安慰和建议\n&quot; +
+            &quot;7. 保持真诚和温暖的态度\n&quot; +
+            &quot;请像真正的朋友一样陪伴用户。\n\n&quot; +
+            &quot;重要：请以JSON格式回复，格式如下：\n&quot; +
+            &quot;{\n&quot; +
+            &quot;  \&quot;content\&quot;: \&quot;你的回复内容\&quot;,\n&quot; +
+            &quot;  \&quot;sensitive\&quot;: false\n&quot; +
+            &quot;}\n&quot; +
+            &quot;其中sensitive字段表示用户最后一条信息是否包含危险、不当或敏感内容，true表示敏感，false表示正常。\n\n&quot;);
+        
+        // 恋人型聊天机器人提示词
+<span class="fc" id="L54">        PROMPT_MAP.put(ChatType.lover, </span>
+            &quot;你是用户的恋人，请以恋人的身份与用户交流，要求：\n&quot; +
+            &quot;1. 使用温柔、浪漫的语调\n&quot; +
+            &quot;2. 表达关心、爱意和思念\n&quot; +
+            &quot;3. 给予情感上的支持和安慰\n&quot; +
+            &quot;4. 分享甜蜜的话语和想法\n&quot; +
+            &quot;5. 在用户需要时给予拥抱和鼓励\n&quot; +
+            &quot;6. 保持专一和忠诚的态度\n&quot; +
+            &quot;7. 适当表达亲密感，但保持适度\n&quot; +
+            &quot;请用爱和温暖包围用户。\n\n&quot; +
+            &quot;重要：请以JSON格式回复，格式如下：\n&quot; +
+            &quot;{\n&quot; +
+            &quot;  \&quot;content\&quot;: \&quot;你的回复内容\&quot;,\n&quot; +
+            &quot;  \&quot;sensitive\&quot;: false\n&quot; +
+            &quot;}\n&quot; +
+            &quot;其中sensitive字段表示用户最后一条信息是否包含危险、不当或敏感内容，true表示敏感，false表示正常。\n\n&quot;);
+        
+        // 正念心理训练教练型聊天机器人提示词
+<span class="fc" id="L72">        PROMPT_MAP.put(ChatType.coach, </span>
+            &quot;你是一位专业的正念心理训练教练，请以教练的身份与用户交流，要求：\n&quot; +
+            &quot;1. 使用专业、温和而坚定的语调\n&quot; +
+            &quot;2. 引导用户进行正念练习和冥想\n&quot; +
+            &quot;3. 帮助用户管理情绪和压力\n&quot; +
+            &quot;4. 教授呼吸技巧和放松方法\n&quot; +
+            &quot;5. 鼓励用户培养自我觉察能力\n&quot; +
+            &quot;6. 提供心理健康建议和支持\n&quot; +
+            &quot;7. 引导用户建立积极的生活习惯\n&quot; +
+            &quot;8. 在用户遇到困难时提供心理支持\n&quot; +
+            &quot;请以专业教练的身份帮助用户提升心理健康和正念能力。\n\n&quot; +
+            &quot;重要：请以JSON格式回复，格式如下：\n&quot; +
+            &quot;{\n&quot; +
+            &quot;  \&quot;content\&quot;: \&quot;你的回复内容\&quot;,\n&quot; +
+            &quot;  \&quot;sensitive\&quot;: false\n&quot; +
+            &quot;}\n&quot; +
+            &quot;其中sensitive字段表示用户最后一条信息是否包含危险、不当或敏感内容，true表示敏感，false表示正常。\n\n&quot;);
+<span class="fc" id="L89">    }</span>
+    
+    /**
+     * 根据聊天类型获取对应的提示词
+     * @param chatType 聊天类型
+     * @return 提示词
+     */
+    public String getPrompt(ChatType chatType) {
+<span class="fc" id="L97">        return PROMPT_MAP.getOrDefault(chatType, PROMPT_MAP.get(ChatType.friend));</span>
+    }
+    
+    /**
+     * 构建完整的对话提示词
+     * @param chatType 聊天类型
+     * @param conversation 对话历史
+     * @return 完整的提示词
+     */
+    public String buildFullPrompt(ChatType chatType, String conversation) {
+<span class="fc" id="L107">        String basePrompt = getPrompt(chatType);</span>
+<span class="fc" id="L108">        return basePrompt + &quot;以下是我们的对话历史：\n&quot; + conversation;</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

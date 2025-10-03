@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuthServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">AuthServiceImpl.java</span></div><h1>AuthServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.dto.request.LoginRequest;
+import com.mentara.dto.request.SignupRequest;
+import com.mentara.dto.request.ResetPasswordRequest;
+import com.mentara.dto.request.RefreshTokenRequest;
+import com.mentara.dto.response.JwtResponse;
+import com.mentara.dto.response.RefreshTokenResponse;
+import com.mentara.entity.User;
+import com.mentara.security.jwt.JwtUtils;
+import com.mentara.service.AuthService;
+import com.mentara.service.LlmSessionInitService;
+import com.mentara.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
+
+@Service
+@Transactional
+<span class="fc" id="L26">public class AuthServiceImpl implements AuthService {</span>
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private LlmSessionInitService llmSessionInitService;
+
+    @Override
+    public JwtResponse authenticateUser(LoginRequest loginRequest) {
+<span class="fc" id="L39">        String inputStudentId = loginRequest.getUsername();</span>
+        
+        // 通过Service层查找用户
+<span class="fc" id="L42">        Optional&lt;User&gt; userOpt = userService.findByStudentId(inputStudentId);</span>
+<span class="pc bpc" id="L43" title="1 of 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L44">            throw new RuntimeException(&quot;学号不存在！&quot;);</span>
+        }
+        
+<span class="fc" id="L47">        User targetUser = userOpt.get();</span>
+        
+        // 检查用户是否被禁用
+<span class="pc bpc" id="L50" title="2 of 4 branches missed.">        if (targetUser.getIsDisabled() != null &amp;&amp; targetUser.getIsDisabled()) {</span>
+<span class="nc" id="L51">            throw new RuntimeException(&quot;账户已被禁用，请联系管理员！&quot;);</span>
+        }
+        
+        // 通过Service层验证密码
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        if (!userService.verifyPassword(loginRequest.getPassword(), targetUser.getUserAuth().getPassword())) {</span>
+<span class="fc" id="L56">            throw new RuntimeException(&quot;学号或密码错误！&quot;);</span>
+        }
+        
+        // 创建认证对象
+<span class="fc" id="L60">        UserDetails userDetails = new org.springframework.security.core.userdetails.User(</span>
+<span class="fc" id="L61">            targetUser.getUsername(),</span>
+<span class="fc" id="L62">            targetUser.getUserAuth().getPassword(),</span>
+<span class="fc" id="L63">            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(&quot;ROLE_&quot; + targetUser.getRole().name()))</span>
+        );
+        
+<span class="fc" id="L66">        Authentication authentication = new UsernamePasswordAuthenticationToken(</span>
+<span class="fc" id="L67">            userDetails, null, userDetails.getAuthorities());</span>
+<span class="fc" id="L68">        SecurityContextHolder.getContext().setAuthentication(authentication);</span>
+        
+        // 更新最后活跃时间
+<span class="fc" id="L71">        userService.updateLastLoginTime(targetUser.getUsername());</span>
+        
+<span class="fc" id="L73">        String jwt = jwtUtils.generateJwtToken(authentication);</span>
+<span class="fc" id="L74">        String refreshToken = jwtUtils.generateRefreshToken(authentication);</span>
+
+<span class="fc" id="L76">        return new JwtResponse(jwt,</span>
+                refreshToken,
+<span class="fc" id="L78">                targetUser.getId(),</span>
+<span class="fc" id="L79">                targetUser.getUsername(),</span>
+<span class="fc" id="L80">                targetUser.getNickname(),</span>
+<span class="fc" id="L81">                targetUser.getUserAuth().getEmail(),</span>
+<span class="fc" id="L82">                targetUser.getRole().name(),</span>
+<span class="fc" id="L83">                targetUser.getAvatar());</span>
+    }
+
+    @Override
+    public User registerUser(SignupRequest signupRequest) {
+<span class="fc" id="L88">        String inputStudentId = signupRequest.getUsername();</span>
+        
+        // 检查学号是否已被未删除的用户使用
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">        if (userService.existsByStudentId(inputStudentId)) {</span>
+<span class="nc" id="L92">            throw new RuntimeException(&quot;学号已被注册！&quot;);</span>
+        }
+        
+        // 检查学号是否被已删除的用户使用
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        if (userService.existsByUsernameIncludingDeleted(inputStudentId)) {</span>
+<span class="nc" id="L97">            throw new RuntimeException(&quot;学号已被使用，无法重新注册！&quot;);</span>
+        }
+
+        // 通过Service层检查邮箱是否已存在
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">        if (userService.existsByEmail(signupRequest.getEmail())) {</span>
+<span class="nc" id="L102">            throw new RuntimeException(&quot;Email is already in use!&quot;);</span>
+        }
+
+        // 通过Service层创建用户
+<span class="fc" id="L106">        User savedUser = userService.createUser(</span>
+            inputStudentId,
+<span class="fc" id="L108">            signupRequest.getEmail(),</span>
+<span class="fc" id="L109">            signupRequest.getPassword(),</span>
+<span class="fc" id="L110">            signupRequest.getNickname()</span>
+        );
+
+        // 为新用户初始化默认LLM会话
+<span class="fc" id="L114">        llmSessionInitService.initializeDefaultSessions(savedUser);</span>
+
+<span class="fc" id="L116">        return savedUser;</span>
+    }
+
+    @Override
+    public boolean resetPassword(ResetPasswordRequest resetRequest) {
+        // 验证新密码和确认密码是否一致
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">        if (!resetRequest.getNewPassword().equals(resetRequest.getConfirmPassword())) {</span>
+<span class="nc" id="L123">            throw new RuntimeException(&quot;新密码和确认密码不一致！&quot;);</span>
+        }
+
+        // 通过Service层重置密码
+<span class="fc" id="L127">        User updatedUser = userService.resetUserPassword(</span>
+<span class="fc" id="L128">            resetRequest.getStudentId(),</span>
+<span class="fc" id="L129">            resetRequest.getEmail(),</span>
+<span class="fc" id="L130">            resetRequest.getNewPassword()</span>
+        );
+        
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (updatedUser == null) {</span>
+<span class="nc" id="L134">            throw new RuntimeException(&quot;学号不存在或学号与邮箱不匹配！&quot;);</span>
+        }
+        
+<span class="fc" id="L137">        return true;</span>
+    }
+
+    @Override
+    public String generateTestJWT() {
+        // 创建一个测试用户的认证对象 - 使用数据库中真实存在的管理员用户
+<span class="fc" id="L143">        UserDetails testUser = new org.springframework.security.core.userdetails.User(</span>
+            &quot;8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918&quot;,
+            &quot;testpass&quot;,
+<span class="fc" id="L146">            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(&quot;ROLE_ADMIN&quot;))</span>
+        );
+        
+<span class="fc" id="L149">        Authentication testAuth = new UsernamePasswordAuthenticationToken(</span>
+<span class="fc" id="L150">            testUser, null, testUser.getAuthorities());</span>
+        
+<span class="fc" id="L152">        return jwtUtils.generateJwtToken(testAuth);</span>
+    }
+
+    @Override
+    public RefreshTokenResponse refreshToken(RefreshTokenRequest request) {
+<span class="fc" id="L157">        String refreshToken = request.getRefreshToken();</span>
+<span class="pc bpc" id="L158" title="1 of 2 branches missed.">        if (!jwtUtils.validateRefreshToken(refreshToken)) {</span>
+<span class="fc" id="L159">            throw new RuntimeException(&quot;无效的refresh token&quot;);</span>
+        }
+<span class="nc" id="L161">        String username = jwtUtils.getUserNameFromRefreshToken(refreshToken);</span>
+<span class="nc" id="L162">        Optional&lt;User&gt; userOpt = userService.findByUsername(username);</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (userOpt.isEmpty()) {</span>
+<span class="nc" id="L164">            throw new RuntimeException(&quot;用户不存在&quot;);</span>
+        }
+<span class="nc" id="L166">        User user = userOpt.get();</span>
+<span class="nc" id="L167">        UserDetails userDetails = new org.springframework.security.core.userdetails.User(</span>
+<span class="nc" id="L168">            user.getUsername(),</span>
+<span class="nc" id="L169">            user.getUserAuth().getPassword(),</span>
+<span class="nc" id="L170">            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(&quot;ROLE_&quot; + user.getRole().name()))</span>
+        );
+<span class="nc" id="L172">        Authentication authentication = new UsernamePasswordAuthenticationToken(</span>
+<span class="nc" id="L173">            userDetails, null, userDetails.getAuthorities());</span>
+<span class="nc" id="L174">        String newAccessToken = jwtUtils.generateJwtToken(authentication);</span>
+<span class="nc" id="L175">        String newRefreshToken = jwtUtils.generateRefreshToken(authentication);</span>
+<span class="nc" id="L176">        return new RefreshTokenResponse(newAccessToken, newRefreshToken);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

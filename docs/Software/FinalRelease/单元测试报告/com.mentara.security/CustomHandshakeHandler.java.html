@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CustomHandshakeHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.security</a> &gt; <span class="el_source">CustomHandshakeHandler.java</span></div><h1>CustomHandshakeHandler.java</h1><pre class="source lang-java linenums">package com.mentara.security;
+
+import com.mentara.security.jwt.JwtUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
+
+import java.security.Principal;
+import java.util.Map;
+
+public class CustomHandshakeHandler extends DefaultHandshakeHandler {
+
+    private final JwtUtils jwtUtils;
+
+    @Autowired
+<span class="fc" id="L19">    public CustomHandshakeHandler(JwtUtils jwtUtils) {</span>
+<span class="fc" id="L20">        this.jwtUtils = jwtUtils;</span>
+<span class="fc" id="L21">    }</span>
+
+    @Override
+    protected Principal determineUser(ServerHttpRequest request,
+                                      WebSocketHandler wsHandler,
+                                      Map&lt;String, Object&gt; attributes) {
+        // 1. 优先从拦截器设置的属性中获取用户ID
+<span class="nc" id="L28">        Long userId = (Long) attributes.get(&quot;userId&quot;);</span>
+
+        // 2. 如果未设置，尝试从 Spring Security 上下文获取
+<span class="nc bnc" id="L31" title="All 2 branches missed.">        if (userId == null) {</span>
+<span class="nc" id="L32">            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();</span>
+<span class="nc bnc" id="L33" title="All 6 branches missed.">            if (authentication != null &amp;&amp; authentication.isAuthenticated() &amp;&amp; authentication.getPrincipal() instanceof UserPrincipal) {</span>
+<span class="nc" id="L34">                userId = ((UserPrincipal) authentication.getPrincipal()).getId();</span>
+            }
+        }
+
+        // 3. 创建 Principal 对象（使用用户ID）
+<span class="nc bnc" id="L39" title="All 2 branches missed.">        if (userId != null) {</span>
+<span class="nc" id="L40">            return new StompPrincipal(userId.toString());</span>
+        }
+
+<span class="nc" id="L43">        return null;</span>
+    }
+
+    // 简单的 Principal 实现（使用用户ID）
+    public static class StompPrincipal implements Principal {
+        private final String id; // 存储用户ID
+
+<span class="nc" id="L50">        public StompPrincipal(String id) {</span>
+<span class="nc" id="L51">            this.id = id;</span>
+<span class="nc" id="L52">        }</span>
+
+        @Override
+        public String getName() {
+<span class="nc" id="L56">            return id; // 返回用户ID</span>
+        }
+
+        // 添加获取数字ID的方法
+        public Long getId() {
+<span class="nc" id="L61">            return Long.parseLong(id);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DeepSeekTestController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">DeepSeekTestController.java</span></div><h1>DeepSeekTestController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.request.DeepSeekRequest;
+import com.mentara.dto.response.DeepSeekResponse;
+import com.mentara.service.DeepSeekService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * DeepSeek API测试控制器
+ */
+<span class="fc" id="L18">@Slf4j</span>
+@RestController
+@RequestMapping(&quot;/deepseek&quot;)
+<span class="fc" id="L21">@RequiredArgsConstructor</span>
+@CrossOrigin(origins = &quot;*&quot;)
+public class DeepSeekTestController {
+    
+    private final DeepSeekService deepSeekService;
+    
+    /**
+     * 测试DeepSeek API连接
+     */
+    @GetMapping(&quot;/test&quot;)
+    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; testConnection() {
+<span class="fc" id="L32">        Map&lt;String, Object&gt; response = new HashMap&lt;&gt;();</span>
+        
+        try {
+<span class="fc" id="L35">            log.info(&quot;开始测试DeepSeek API连接...&quot;);</span>
+            
+            // 构建测试请求
+<span class="fc" id="L38">            DeepSeekRequest request = DeepSeekRequest.builder()</span>
+<span class="fc" id="L39">                    .model(&quot;deepseek-chat&quot;)</span>
+<span class="fc" id="L40">                    .messages(Collections.singletonList(</span>
+<span class="fc" id="L41">                            DeepSeekRequest.Message.builder()</span>
+<span class="fc" id="L42">                                    .role(&quot;user&quot;)</span>
+<span class="fc" id="L43">                                    .content(&quot;你好，请简单回复'连接成功'&quot;)</span>
+<span class="fc" id="L44">                                    .build()</span>
+                    ))
+<span class="fc" id="L46">                    .temperature(0.7)</span>
+<span class="fc" id="L47">                    .maxTokens(50)</span>
+<span class="fc" id="L48">                    .stream(false)</span>
+<span class="fc" id="L49">                    .build();</span>
+            
+            // 发送请求
+<span class="fc" id="L52">            DeepSeekResponse deepSeekResponse = deepSeekService.sendChatRequest(request);</span>
+            
+<span class="fc bfc" id="L54" title="All 6 branches covered.">            if (deepSeekResponse != null &amp;&amp; deepSeekResponse.getChoices() != null &amp;&amp; !deepSeekResponse.getChoices().isEmpty()) {</span>
+<span class="fc" id="L55">                String content = deepSeekResponse.getChoices().get(0).getMessage().getContent();</span>
+                
+<span class="fc" id="L57">                response.put(&quot;success&quot;, true);</span>
+<span class="fc" id="L58">                response.put(&quot;message&quot;, &quot;DeepSeek API连接成功&quot;);</span>
+<span class="fc" id="L59">                response.put(&quot;response&quot;, content);</span>
+<span class="fc" id="L60">                response.put(&quot;model&quot;, deepSeekResponse.getModel());</span>
+<span class="fc" id="L61">                response.put(&quot;usage&quot;, deepSeekResponse.getUsage());</span>
+                
+<span class="fc" id="L63">                log.info(&quot;DeepSeek API连接测试成功&quot;);</span>
+<span class="fc" id="L64">                return ResponseEntity.ok(response);</span>
+            } else {
+<span class="fc" id="L66">                response.put(&quot;success&quot;, false);</span>
+<span class="fc" id="L67">                response.put(&quot;message&quot;, &quot;DeepSeek API响应格式异常&quot;);</span>
+<span class="fc" id="L68">                log.warn(&quot;DeepSeek API响应格式异常&quot;);</span>
+<span class="fc" id="L69">                return ResponseEntity.ok(response);</span>
+            }
+            
+<span class="fc" id="L72">        } catch (Exception e) {</span>
+<span class="fc" id="L73">            log.error(&quot;DeepSeek API连接测试失败&quot;, e);</span>
+            
+<span class="fc" id="L75">            response.put(&quot;success&quot;, false);</span>
+<span class="fc" id="L76">            response.put(&quot;message&quot;, &quot;DeepSeek API连接失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L77">            response.put(&quot;error&quot;, e.getClass().getSimpleName());</span>
+            
+<span class="fc" id="L79">            return ResponseEntity.ok(response);</span>
+        }
+    }
+    
+    /**
+     * 简单聊天测试
+     */
+    @PostMapping(&quot;/chat&quot;)
+    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; simpleChat(@RequestBody Map&lt;String, String&gt; request) {
+<span class="fc" id="L88">        Map&lt;String, Object&gt; response = new HashMap&lt;&gt;();</span>
+        
+        try {
+<span class="fc" id="L91">            String message = request.get(&quot;message&quot;);</span>
+<span class="fc" id="L92">            String model = request.getOrDefault(&quot;model&quot;, &quot;deepseek-chat&quot;);</span>
+            
+<span class="fc bfc" id="L94" title="All 4 branches covered.">            if (message == null || message.trim().isEmpty()) {</span>
+<span class="fc" id="L95">                response.put(&quot;success&quot;, false);</span>
+<span class="fc" id="L96">                response.put(&quot;message&quot;, &quot;消息内容不能为空&quot;);</span>
+<span class="fc" id="L97">                return ResponseEntity.badRequest().body(response);</span>
+            }
+            
+<span class="fc" id="L100">            log.info(&quot;发送聊天请求: {}&quot;, message);</span>
+            
+            // 使用简化的方法
+<span class="fc" id="L103">            String reply = deepSeekService.generateResponse(message, model);</span>
+            
+<span class="fc" id="L105">            response.put(&quot;success&quot;, true);</span>
+<span class="fc" id="L106">            response.put(&quot;message&quot;, &quot;聊天成功&quot;);</span>
+<span class="fc" id="L107">            response.put(&quot;reply&quot;, reply);</span>
+<span class="fc" id="L108">            response.put(&quot;model&quot;, model);</span>
+            
+<span class="fc" id="L110">            log.info(&quot;聊天请求处理成功&quot;);</span>
+<span class="fc" id="L111">            return ResponseEntity.ok(response);</span>
+            
+<span class="fc" id="L113">        } catch (Exception e) {</span>
+<span class="fc" id="L114">            log.error(&quot;聊天请求处理失败&quot;, e);</span>
+            
+<span class="fc" id="L116">            response.put(&quot;success&quot;, false);</span>
+<span class="fc" id="L117">            response.put(&quot;message&quot;, &quot;聊天请求失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L118">            response.put(&quot;error&quot;, e.getClass().getSimpleName());</span>
+            
+<span class="fc" id="L120">            return ResponseEntity.ok(response);</span>
+        }
+    }
+    
+    /**
+     * 获取API状态信息
+     */
+    @GetMapping(&quot;/status&quot;)
+    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; getStatus() {
+<span class="fc" id="L129">        Map&lt;String, Object&gt; response = new HashMap&lt;&gt;();</span>
+        
+<span class="fc" id="L131">        response.put(&quot;service&quot;, &quot;DeepSeek API&quot;);</span>
+<span class="fc" id="L132">        response.put(&quot;status&quot;, &quot;available&quot;);</span>
+<span class="fc" id="L133">        response.put(&quot;timestamp&quot;, System.currentTimeMillis());</span>
+        
+<span class="fc" id="L135">        return ResponseEntity.ok(response);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

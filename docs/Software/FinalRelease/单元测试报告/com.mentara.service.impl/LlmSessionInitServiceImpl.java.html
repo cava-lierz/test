@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LlmSessionInitServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.impl</a> &gt; <span class="el_source">LlmSessionInitServiceImpl.java</span></div><h1>LlmSessionInitServiceImpl.java</h1><pre class="source lang-java linenums">package com.mentara.service.impl;
+
+import com.mentara.document.LlmMessageDocument;
+import com.mentara.document.LlmSessionDocument;
+import com.mentara.entity.User;
+import com.mentara.enums.ChatType;
+import com.mentara.repository.LlmMessageRepository;
+import com.mentara.repository.LlmSessionRepository;
+import com.mentara.service.LlmSessionInitService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * LLM会话初始化服务实现类
+ */
+<span class="fc" id="L20">@Slf4j</span>
+@Service
+<span class="fc" id="L22">public class LlmSessionInitServiceImpl implements LlmSessionInitService {</span>
+
+    @Autowired
+    private LlmSessionRepository llmSessionRepository;
+
+    @Autowired
+    private LlmMessageRepository llmMessageRepository;
+
+    // 默认欢迎消息映射
+<span class="fc" id="L31">    private static final Map&lt;ChatType, String&gt; DEFAULT_MESSAGES = new HashMap&lt;&gt;();</span>
+
+    static {
+<span class="fc" id="L34">        DEFAULT_MESSAGES.put(ChatType.expert, &quot;你好！我是你的专业顾问，可以为你提供专业的知识和建议。请告诉我你需要什么帮助？&quot;);</span>
+<span class="fc" id="L35">        DEFAULT_MESSAGES.put(ChatType.friend, &quot;嗨！我是你的朋友，我们可以聊聊天，分享生活中的点点滴滴。今天过得怎么样？&quot;);</span>
+<span class="fc" id="L36">        DEFAULT_MESSAGES.put(ChatType.lover, &quot;亲爱的，我是你的恋人，永远在这里陪伴你。有什么想和我分享的吗？&quot;);</span>
+<span class="fc" id="L37">        DEFAULT_MESSAGES.put(ChatType.coach, &quot;你好！我是你的正念心理训练教练，可以帮助你进行正念练习、情绪管理和压力缓解。准备好开始我们的正念之旅了吗？&quot;);</span>
+<span class="fc" id="L38">    }</span>
+
+    @Override
+    public void initializeDefaultSessions(User user) {
+<span class="fc" id="L42">        log.info(&quot;为用户 {} 初始化默认LLM会话&quot;, user.getUsername());</span>
+
+        try {
+            // 为每种聊天类型创建一个会话
+<span class="fc bfc" id="L46" title="All 2 branches covered.">            for (ChatType chatType : ChatType.values()) {</span>
+                // 创建会话
+<span class="fc" id="L48">                LlmSessionDocument session = createSession(user, chatType);</span>
+                
+                // 创建默认消息
+<span class="fc" id="L51">                createDefaultMessage(session, chatType);</span>
+                
+<span class="fc" id="L53">                log.info(&quot;为用户 {} 创建了 {} 类型的会话: {}&quot;, </span>
+<span class="fc" id="L54">                    user.getUsername(), chatType, session.getId());</span>
+            }
+            
+<span class="fc" id="L57">            log.info(&quot;用户 {} 的默认LLM会话初始化完成&quot;, user.getUsername());</span>
+<span class="nc" id="L58">        } catch (Exception e) {</span>
+<span class="nc" id="L59">            log.error(&quot;为用户 {} 初始化LLM会话失败: {}&quot;, user.getUsername(), e.getMessage(), e);</span>
+            // 不抛出异常，避免影响用户注册流程
+<span class="fc" id="L61">        }</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * 创建LLM会话
+     */
+    private LlmSessionDocument createSession(User user, ChatType chatType) {
+<span class="fc" id="L68">        LlmSessionDocument session = new LlmSessionDocument();</span>
+<span class="fc" id="L69">        session.setUserId(user.getId());</span>
+<span class="fc" id="L70">        session.setChatType(chatType);</span>
+<span class="fc" id="L71">        session.setModel(&quot;deepseek-chat&quot;);</span>
+<span class="fc" id="L72">        session.setIsSensitive(false);</span>
+        
+<span class="fc" id="L74">        return llmSessionRepository.save(session);</span>
+    }
+
+    /**
+     * 创建默认消息
+     */
+    public LlmMessageDocument createDefaultMessage(LlmSessionDocument session, ChatType chatType) {
+<span class="fc" id="L81">        LlmMessageDocument message = new LlmMessageDocument();</span>
+<span class="fc" id="L82">        message.setSessionId(session.getId());</span>
+<span class="fc" id="L83">        message.setRole(&quot;assistant&quot;);</span>
+<span class="fc" id="L84">        message.setContent(DEFAULT_MESSAGES.get(chatType));</span>
+        
+<span class="fc" id="L86">        return llmMessageRepository.save(message);</span>
+    }
+} 
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

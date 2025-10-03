@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostLikeNotificationStrategy.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.service.notification.strategy</a> &gt; <span class="el_source">PostLikeNotificationStrategy.java</span></div><h1>PostLikeNotificationStrategy.java</h1><pre class="source lang-java linenums">package com.mentara.service.notification.strategy;
+
+import com.mentara.entity.Notification;
+import com.mentara.entity.PostLikeNotification;
+import com.mentara.repository.NotificationRepository;
+import com.mentara.service.notification.NotificationContext;
+import com.mentara.service.notification.NotificationStrategy;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+/**
+ * 帖子点赞通知策略
+ */
+@Component
+<span class="fc" id="L18">public class PostLikeNotificationStrategy implements NotificationStrategy {</span>
+    
+    @Autowired
+    private NotificationRepository notificationRepository;
+    
+    @Override
+    public boolean shouldSend(NotificationContext context) {
+<span class="pc bpc" id="L25" title="1 of 2 branches missed.">        return !context.getSender().getId().equals(context.getReceiver().getId());</span>
+    }
+    
+    @Override
+    public Notification createOrUpdate(NotificationContext context) {
+<span class="nc" id="L30">        Optional&lt;PostLikeNotification&gt; existingNotification = </span>
+<span class="nc" id="L31">            notificationRepository.findUnreadPostLikeNotificationByReceiverAndPost(</span>
+<span class="nc" id="L32">                context.getReceiver(), context.getPost());</span>
+        
+        PostLikeNotification notification;
+<span class="nc bnc" id="L35" title="All 2 branches missed.">        if (existingNotification.isPresent()) {</span>
+            // 更新现有通知
+<span class="nc" id="L37">            notification = existingNotification.get();</span>
+<span class="nc" id="L38">            notification.setLastLiker(context.getSender());</span>
+<span class="nc" id="L39">            notification.setLikerCount(notification.getLikerCount() + 1);</span>
+<span class="nc" id="L40">            notification.setCreatedAt(LocalDateTime.now());</span>
+        } else {
+            // 创建新通知
+<span class="nc" id="L43">            notification = new PostLikeNotification();</span>
+<span class="nc" id="L44">            notification.setReceiver(context.getReceiver());</span>
+<span class="nc" id="L45">            notification.setRead(false);</span>
+<span class="nc" id="L46">            notification.setLastLiker(context.getSender());</span>
+<span class="nc" id="L47">            notification.setLikerCount(1);</span>
+<span class="nc" id="L48">            notification.setPost(context.getPost());</span>
+        }
+        
+<span class="nc" id="L51">        return notification;</span>
+    }
+    
+    @Override
+    public String getType() {
+<span class="fc" id="L56">        return &quot;POST_LIKE&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

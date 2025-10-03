@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mentara-server</a> &gt; <a href="index.source.html" class="el_package">com.mentara.controller</a> &gt; <span class="el_source">UserController.java</span></div><h1>UserController.java</h1><pre class="source lang-java linenums">package com.mentara.controller;
+
+import com.mentara.dto.request.UpdateUserRequest;
+import com.mentara.dto.request.UpdatePrivacyRequest;
+import com.mentara.dto.response.MessageResponse;
+import com.mentara.dto.response.UserProfileResponse;
+import com.mentara.entity.User;
+import com.mentara.security.UserPrincipal;
+import com.mentara.service.PostService;
+import com.mentara.service.UserService;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+@CrossOrigin(origins = &quot;*&quot;, maxAge = 3600)
+@RestController
+@RequestMapping(&quot;/users&quot;)
+<span class="fc" id="L22">public class UserController {</span>
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private PostService postService;
+
+    @GetMapping(&quot;/profile&quot;)
+    public ResponseEntity&lt;User&gt; getCurrentUser(Authentication authentication) {
+<span class="fc" id="L32">        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();</span>
+<span class="fc" id="L33">        Optional&lt;User&gt; user = userService.findById(userPrincipal.getId());</span>
+        
+<span class="fc bfc" id="L35" title="All 2 branches covered.">        if (user.isPresent()) {</span>
+<span class="fc" id="L36">            return ResponseEntity.ok(user.get());</span>
+        } else {
+<span class="fc" id="L38">            return ResponseEntity.notFound().build();</span>
+        }
+    }
+
+    @PutMapping(&quot;/profile&quot;)
+    public ResponseEntity&lt;?&gt; updateCurrentUser(@Valid @RequestBody UpdateUserRequest updateRequest,
+                                              Authentication authentication) {
+<span class="fc" id="L45">        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();</span>
+<span class="fc" id="L46">        Optional&lt;User&gt; userOpt = userService.findById(userPrincipal.getId());</span>
+        
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L49">            User user = userOpt.get();</span>
+            
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">            if (updateRequest.getNickname() != null) {</span>
+<span class="fc" id="L52">                user.setNickname(updateRequest.getNickname());</span>
+            }
+<span class="pc bpc" id="L54" title="1 of 2 branches missed.">            if (updateRequest.getAvatar() != null) {</span>
+<span class="nc" id="L55">                user.setAvatar(updateRequest.getAvatar());</span>
+            }
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">            if (updateRequest.getBio() != null) {</span>
+<span class="nc" id="L58">                user.setBio(updateRequest.getBio());</span>
+            }
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">            if (updateRequest.getGender() != null) {</span>
+<span class="nc" id="L61">                user.setGender(updateRequest.getGender());</span>
+            }
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">            if (updateRequest.getAge() != null) {</span>
+<span class="nc" id="L64">                user.setAge(updateRequest.getAge());</span>
+            }
+            
+<span class="fc" id="L67">            User updatedUser = userService.updateUser(user);</span>
+<span class="fc" id="L68">            return ResponseEntity.ok(updatedUser);</span>
+        } else {
+<span class="fc" id="L70">            return ResponseEntity.badRequest().body(new MessageResponse(&quot;用户不存在&quot;));</span>
+        }
+    }
+
+    @GetMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;?&gt; getUserById(@PathVariable Long id, Authentication authentication) {
+<span class="fc" id="L76">        Optional&lt;User&gt; user = userService.findById(id);</span>
+        
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        if (user.isPresent()) {</span>
+<span class="fc" id="L79">            User userEntity = user.get();</span>
+            
+            // 如果用户不公开个人信息，且不是当前用户自己，则返回有限信息
+<span class="pc bpc" id="L82" title="3 of 4 branches missed.">            if (!userEntity.getIsProfilePublic() &amp;&amp; </span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">                (authentication == null || !userEntity.getId().equals(((UserPrincipal) authentication.getPrincipal()).getId()))) {</span>
+                // 返回不公开信息
+<span class="nc" id="L85">                return ResponseEntity.ok(new MessageResponse(&quot;该用户不公开个人信息&quot;));</span>
+            }
+            
+<span class="fc" id="L88">            return ResponseEntity.ok(userEntity);</span>
+        } else {
+<span class="fc" id="L90">            return ResponseEntity.notFound().build();</span>
+        }
+    }
+    
+    @GetMapping(&quot;/profile/stats&quot;)
+    public ResponseEntity&lt;UserProfileResponse&gt; getCurrentUserStats(Authentication authentication) {
+<span class="fc" id="L96">        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();</span>
+<span class="fc" id="L97">        UserProfileResponse userStats = userService.getUserProfileStats(userPrincipal.getId());</span>
+<span class="fc" id="L98">        return ResponseEntity.ok(userStats);</span>
+    }
+    
+    @GetMapping(&quot;/{id}/stats&quot;)
+    public ResponseEntity&lt;UserProfileResponse&gt; getUserStatsById(@PathVariable Long id) {
+<span class="fc" id="L103">        UserProfileResponse userStats = userService.getUserProfileStats(id);</span>
+<span class="fc" id="L104">        return ResponseEntity.ok(userStats);</span>
+    }
+
+    @PutMapping(&quot;/profile/privacy&quot;)
+    public ResponseEntity&lt;?&gt; updatePrivacySettings(@Valid @RequestBody UpdatePrivacyRequest privacyRequest,
+                                                  Authentication authentication) {
+<span class="fc" id="L110">        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();</span>
+<span class="fc" id="L111">        Optional&lt;User&gt; userOpt = userService.findById(userPrincipal.getId());</span>
+        
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        if (userOpt.isPresent()) {</span>
+<span class="fc" id="L114">            User user = userOpt.get();</span>
+            
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">            if (privacyRequest.getIsProfilePublic() != null) {</span>
+<span class="fc" id="L117">                user.setIsProfilePublic(privacyRequest.getIsProfilePublic());</span>
+            }
+            
+<span class="fc" id="L120">            User updatedUser = userService.updateUser(user);</span>
+<span class="fc" id="L121">            return ResponseEntity.ok(updatedUser);</span>
+        } else {
+<span class="fc" id="L123">            return ResponseEntity.badRequest().body(new MessageResponse(&quot;用户不存在&quot;));</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>
