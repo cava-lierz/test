@@ -210,6 +210,3 @@ docs/.doctrees/
 .eslintcache
 .stylelintcache
 
-#微服务
-microservices/
-.VsCodeCounter/

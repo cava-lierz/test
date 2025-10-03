@@ -1,0 +1,3 @@
+[submodule "microservices/quick-embedding/third_party/llama.cpp"]
+	path = microservices/quick-embedding/third_party/llama.cpp
+	url = https://gitee.com/ShadowNearby/llama.cpp.git
