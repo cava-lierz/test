@@ -1,24 +1,13 @@
 # BERT服务最小化CPU依赖包
-# 适用于Ubuntu服务器，Python 3.13
+# 适用于Ubuntu服务器，无GPU环境
 
-# Web框架 - 核心依赖
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
+# Web框架
+fastapi
+uvicorn[standard]
 
-# Transformers - BERT模型核心
-transformers==4.36.0
-tokenizers==0.15.0
+# BERT模型核心
+transformers
 
-# PyTorch CPU版本 - 最小化安装
---find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.1.1+cpu
-torchvision==0.16.1+cpu
-torchaudio==2.1.1+cpu
-
-# 模型推理优化
-accelerate==0.25.0
-
-# 文本处理
-sentencepiece==0.1.99
-protobuf==4.25.1
+# CPU加速优化
+optimum[onnxruntime]
+onnxruntime
