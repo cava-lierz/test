@@ -58,8 +58,8 @@ def load_model(model_path, task, model_name):
 
 # 加载两个模型
 # 模型路径 - 相对于项目根目录
-MOOD_SCORE_PATH = os.getenv("MOOD_SCORE_PATH", "../../models/bert_4_moods")
-DEPRESS_CHECK_PATH = os.getenv("DEPRESS_CHECK_PATH", "../../models/bert-depress-check")
+MOOD_SCORE_PATH = os.getenv("MOOD_SCORE_PATH", "model/bert_4_moods")
+DEPRESS_CHECK_PATH = os.getenv("DEPRESS_CHECK_PATH", "model/bert-depress-check")
 
 mood_score_pipeline = load_model(MOOD_SCORE_PATH, "text-classification", "情绪评分模型")
 depress_check_pipeline = load_model(DEPRESS_CHECK_PATH, "text-classification", "抑郁检查模型")
