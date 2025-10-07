@@ -13,7 +13,9 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./data/mysql:/var/lib/mysql # ✅ 持久化到宿主机目录
+      - ./data/mysql:/var/lib/mysql:Z # ✅ 持久化到宿主机目录，Z标签支持SELinux
+    security_opt:
+      - seccomp:unconfined
 
   mongodb:
     image: mongo:latest

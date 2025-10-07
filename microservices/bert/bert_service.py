@@ -7,6 +7,9 @@ import logging
 import os
 from typing import Union
 
+HOST="127.0.0.1"
+PORT=8082
+
 # 配置日志      
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,4 +105,4 @@ async def depress_check(request: TextRequest):
         return {"error": "处理请求时出错"}, 500
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=HOST, port=PORT)

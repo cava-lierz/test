@@ -144,7 +144,7 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    int port = 8080;
+    int port = 8081;
     std::string model_path = "./model/nomic-embed-text-v1.5.Q8_0.gguf";
     int n_gpu_layers = 9999;  // 使用所有GPU层
     
