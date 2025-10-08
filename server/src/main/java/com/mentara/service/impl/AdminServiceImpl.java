@@ -13,6 +13,7 @@ import com.mentara.repository.CommentReportRepository;
 import com.mentara.entity.Report;
 import com.mentara.entity.CommentReport;
 import com.mentara.service.AdminService;
+import com.mentara.service.OssService;
 import com.mentara.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -51,6 +52,9 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private OssService ossService;
 
     @Override
     @Cacheable(value = "statistics", key = "'admin_stats'")
@@ -153,7 +157,10 @@ public class AdminServiceImpl implements AdminService {
             // 使用用户表中的被举报次数（持久化存储）
             Integer reportedCount = user.getReportedCount() != null ? user.getReportedCount() : 0;
             
-            return UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating, reportedCount);
+            UserProfileResponse response = 
+                UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating, reportedCount);
+            response.setAvatar(ossService.generatePresignedUrl(user.getAvatar(), 3600L));
+            return response;
         } catch (Exception e) {
             // 返回一个基本的用户信息，避免整个请求失败
             return UserProfileResponse.fromUser(user, 0, 0, 0, 0.0, 0);

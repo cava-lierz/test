@@ -1,12 +1,16 @@
  package com.mentara.dto.response;
 
 import com.mentara.entity.User;
+import com.mentara.service.OssService;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Data
 @NoArgsConstructor
@@ -30,6 +34,7 @@ public class UserProfileResponse {
     private Integer commentsCount;     // 评论数量
     private Double averageMoodRating;  // 平均心情评分
     private Integer reportedPostsCount; // 被举报次数（持久化存储）
+
     
     // 时间信息
     private LocalDateTime createdAt;

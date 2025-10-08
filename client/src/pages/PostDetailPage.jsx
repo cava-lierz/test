@@ -226,7 +226,7 @@ export default function PostDetailPage() {
                   { avatar: post.authorAvatar },
                   "https://i.pravatar.cc/150?u=anon"
                 )}
-                alt={post.author}
+                alt={post.authorNickname}
                 className={`post-detail-avatar ${
                   post.authorRole === "ADMIN" ? "admin-avatar" : ""
                 } ${post.authorRole === "EXPERT" ? "expert-avatar" : ""}`}

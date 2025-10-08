@@ -1,6 +1,6 @@
 package com.mentara.service.impl;
 
-import com.aliyun.oss.OSS;
+import com.obs.services.ObsClient;
 import com.mentara.config.OssConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OssServiceImplTest {
     @Mock
-    private OSS ossClient;
+    private ObsClient ossClient;
     @Mock
     private OssConfig ossConfig;
     @InjectMocks

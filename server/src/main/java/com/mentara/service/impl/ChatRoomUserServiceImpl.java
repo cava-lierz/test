@@ -11,6 +11,8 @@ import com.mentara.repository.ChatRoomUserRepository;
 import com.mentara.repository.UserRepository;
 import com.mentara.service.ChatRoomUserService;
 import com.mentara.util.AvatarUtils;
+import com.mentara.service.OssService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +29,8 @@ public class ChatRoomUserServiceImpl implements ChatRoomUserService {
     private ChatRoomRepository chatRoomRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private OssService ossService;
 
     @Override
     public void save(ChatRoomUser chatRoomUser){
@@ -231,6 +235,10 @@ public class ChatRoomUserServiceImpl implements ChatRoomUserService {
         if (displayAvatar == null || displayAvatar.isEmpty()) {
             String uniqueKey = chatRoomUser.getChatRoom().getId() + "_" + chatRoomUser.getUser().getId();
             displayAvatar = AvatarUtils.generateRandomDefaultAvatar(uniqueKey);
+        }
+        // 如果 displayAvatar 看起来像 object key，则转换为临时URL
+        if (displayAvatar != null) {
+            displayAvatar = ossService.generatePresignedUrl(displayAvatar, 3600L);
         }
         resp.setDisplayAvatar(displayAvatar);
         

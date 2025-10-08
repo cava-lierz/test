@@ -27,6 +27,9 @@ public class UserFollowController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private com.mentara.service.OssService ossService;
+
     /**
      * 关注用户
      */
@@ -85,7 +88,9 @@ public class UserFollowController {
                     userMap.put("id", user.getId());
                     userMap.put("name", user.getNickname() != null ? user.getNickname() : user.getUsername());
                     userMap.put("email", user.getUserAuth() != null ? user.getUserAuth().getEmail() : "");
-                    userMap.put("avatar", user.getAvatar());
+                    String avatar = user.getAvatar();
+                    String presigned = ossService.generatePresignedUrl(avatar, 3600L);
+                    userMap.put("avatar", presigned);
                     userMap.put("bio", user.getBio());
                     return userMap;
                 }
@@ -114,7 +119,9 @@ public class UserFollowController {
                     userMap.put("id", user.getId());
                     userMap.put("name", user.getNickname() != null ? user.getNickname() : user.getUsername());
                     userMap.put("email", user.getUserAuth() != null ? user.getUserAuth().getEmail() : "");
-                    userMap.put("avatar", user.getAvatar());
+                    String avatar = user.getAvatar();
+                    String presigned = ossService.generatePresignedUrl(avatar, 3600L);
+                    userMap.put("avatar", presigned);
                     userMap.put("bio", user.getBio());
                     return userMap;
                 }

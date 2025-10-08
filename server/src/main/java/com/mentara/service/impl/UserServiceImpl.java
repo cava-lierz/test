@@ -59,6 +59,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private CryptoUtils cryptoUtils;
 
+    @Autowired
+    private com.mentara.service.OssService ossService;
+
     @Override
     @CacheEvict(value = "users", allEntries = true)
     public User save(User user) {
@@ -203,7 +206,11 @@ public class UserServiceImpl implements UserService {
         // 获取用户平均心情评分（从打卡记录中计算）
         Double averageMoodRating = checkinRepository.findAverageRatingByUserId(userId);
         
-        return UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating);
+
+        UserProfileResponse response = 
+            UserProfileResponse.fromUser(user, postsCount, totalLikes, commentsCount, averageMoodRating);
+        response.setAvatar(ossService.generatePresignedUrl(user.getAvatar(), 3600L));
+        return response;
     }
     
     @Override
@@ -358,7 +365,17 @@ public class UserServiceImpl implements UserService {
             dto.setUserId(user.getId());
             dto.setUsername(user.getUsername());
             dto.setNickname(user.getNickname());
-            dto.setAvatar(user.getAvatar());
+            String avatar = user.getAvatar();
+            if (avatar != null && !avatar.isEmpty() && !avatar.startsWith("http")) {
+                try {
+                    String presigned = ossService.generatePresignedUrl(avatar, 3600L);
+                    dto.setAvatar(presigned != null ? presigned : avatar);
+                } catch (Exception ignored) {
+                    dto.setAvatar(avatar);
+                }
+            } else {
+                dto.setAvatar(avatar);
+            }
             
             // 查找对应的专家详细信息
             Optional<Expert> expertOpt = expertRepository.findByUserId(user.getId());

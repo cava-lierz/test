@@ -29,6 +29,9 @@ public class AuthServiceImpl implements AuthService {
     private UserService userService;
 
     @Autowired
+    private com.mentara.service.OssService ossService;
+
+    @Autowired
     private JwtUtils jwtUtils;
 
     @Autowired
@@ -73,6 +76,11 @@ public class AuthServiceImpl implements AuthService {
         String jwt = jwtUtils.generateJwtToken(authentication);
         String refreshToken = jwtUtils.generateRefreshToken(authentication);
 
+        String avatar = targetUser.getAvatar();
+
+        String presigned = ossService.generatePresignedUrl(avatar, 3600L);
+        avatar = presigned;
+
         return new JwtResponse(jwt,
                 refreshToken,
                 targetUser.getId(),
@@ -80,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 targetUser.getNickname(),
                 targetUser.getUserAuth().getEmail(),
                 targetUser.getRole().name(),
-                targetUser.getAvatar());
+                avatar);
     }
 
     @Override

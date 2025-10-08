@@ -4,11 +4,16 @@ import com.mentara.dto.response.CommentResponse;
 import com.mentara.entity.Comment;
 import com.mentara.entity.User;
 import com.mentara.util.AvatarUtils;
+import com.mentara.service.OssService;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.stereotype.Component;
 
 @Component
 public class CommentConverter {
+
+    @Autowired
+    private OssService ossService;
 
 
     public CommentResponse toResponse(Comment comment, boolean isLiked) {
@@ -26,6 +31,10 @@ public class CommentConverter {
         if (author.getIsDeleted() != null && author.getIsDeleted()) {
             authorNickname = "已删除用户";
             authorAvatar = AvatarUtils.getDeletedUserAvatar();
+        }
+        // 如果是object key，转换为临时URL
+        if (authorAvatar != null) {
+            authorAvatar = ossService.generatePresignedUrl(authorAvatar, 3600L);
         }
         
         // 处理软删除评论的情况

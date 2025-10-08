@@ -15,9 +15,17 @@ public interface OssService {
     
     /**
      * 删除OSS中的文件
-     * @param fileUrl 文件的URL
+    * @param objectKey 对象在存储桶中的键（key），例如: avatars/xxx.jpg
      */
     void deleteFile(String fileUrl);
+
+    /**
+    * 根据对象键生成临时可访问的链接（私有桶用）
+    * @param objectKey 对象键
+    * @param expiresInSeconds 链接有效期（秒）
+    * @return 可访问的临时URL
+    */
+    String generatePresignedUrl(String objectKey, long expiresInSeconds);
     
     /**
      * 生成唯一的文件名

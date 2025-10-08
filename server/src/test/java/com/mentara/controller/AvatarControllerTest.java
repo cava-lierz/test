@@ -33,6 +33,8 @@ class AvatarControllerTest {
     private FileUploadService fileUploadService;
     @MockBean
     private UserService userService;
+    @MockBean
+    private com.mentara.service.OssService ossService;
 
     @Test
     @WithUserDetails(value = "user1", userDetailsServiceBeanName = "userDetailsService")
@@ -41,7 +43,8 @@ class AvatarControllerTest {
         user.setId(2L);
         user.setUsername("user1");
         when(userService.findByUsername("user1")).thenReturn(Optional.of(user));
-        when(fileUploadService.uploadAvatar(any(), any())).thenReturn("avatar.png");
+    when(fileUploadService.uploadAvatar(any(), any())).thenReturn("avatars/avatar.png");
+    when(ossService.generatePresignedUrl("avatars/avatar.png", 3600L)).thenReturn("http://signed-url/avatars/avatar.png");
         when(userService.save(any())).thenReturn(user);
         MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", "dummydata".getBytes());
         mockMvc.perform(multipart("/avatar/upload").file(file))
@@ -127,7 +130,8 @@ class AvatarControllerTest {
         user.setUsername("user1");
         user.setAvatar("old_avatar.png");
         when(userService.findByUsername("user1")).thenReturn(Optional.of(user));
-        when(fileUploadService.uploadAvatar(any(), any())).thenReturn("new_avatar.png");
+    when(fileUploadService.uploadAvatar(any(), any())).thenReturn("avatars/new_avatar.png");
+    when(ossService.generatePresignedUrl("avatars/new_avatar.png", 3600L)).thenReturn("http://signed-url/avatars/new_avatar.png");
         when(userService.save(any())).thenReturn(user);
         MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", "dummydata".getBytes());
         mockMvc.perform(multipart("/avatar/upload").file(file))

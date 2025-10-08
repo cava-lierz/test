@@ -33,7 +33,8 @@ public class PostRequest {
     private List<Long> tagIds; // 标签集合，如 "#正能量", "#分享"
 
     @Size(max = 9, message = "图片数量不能超过9张")
-    private List<@Pattern(regexp = "https?://.+", message = "图片URL格式不正确") String> imageUrls;
+    // Accept either a http(s) URL or an object key (e.g. posts/xxxxx.jpg)
+    private List<@Pattern(regexp = "(https?://.+|[A-Za-z0-9_\\-./]+)", message = "图片URL格式不正确") String> imageUrls;
 
     private Boolean isAnnouncement = false; // 是否为公告帖子
 }
