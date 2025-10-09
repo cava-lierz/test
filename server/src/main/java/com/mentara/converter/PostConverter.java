@@ -4,11 +4,15 @@ import com.mentara.dto.response.PostResponse;
 import com.mentara.entity.Post;
 import com.mentara.entity.User;
 import com.mentara.util.AvatarUtils;
+import com.mentara.service.OssService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 
 @Component
 public class PostConverter {
+    @Autowired
+    private OssService ossService;
     public PostResponse toResponse(Post post, boolean isLiked) {
         User author = post.getAuthor();
         
@@ -30,13 +34,15 @@ public class PostConverter {
                 .content(post.getContent())
                 .mood(post.getMood())
                 .tags(post.getTags())
-                .imageUrls(post.getImageUrls())
+                .imageUrls(post.getImageUrls() == null ? null : post.getImageUrls().stream().map(key -> 
+                    ossService.generatePresignedUrl(key, 3600L)
+                ).toList())
                 .likesCount(post.getLikesCount())
                 .commentsCount(post.getCommentsCount())
                 .createdAt(post.getCreatedAt())
                 .authorId(author.getId())
                 .authorNickname(authorNickname)
-                .authorAvatar(authorAvatar)
+                .authorAvatar(ossService.generatePresignedUrl(authorAvatar, 3600L))
                 .isLiked(isLiked)
                 .isAnnouncement(post.getIsAnnouncement())
                 .authorRole(authorRole)

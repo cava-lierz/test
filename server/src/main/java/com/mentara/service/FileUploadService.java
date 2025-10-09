@@ -7,7 +7,7 @@ public interface FileUploadService {
      * 上传头像文件
      * @param file 上传的文件
      * @param userId 用户ID
-     * @return 文件访问URL
+     * @return 存储在数据库中的对象键（key），例如: avatars/xxx.jpg
      */
     String uploadAvatar(MultipartFile file, Long userId);
     
@@ -15,7 +15,7 @@ public interface FileUploadService {
      * 上传帖子图片
      * @param file 上传的文件
      * @param userId 用户ID
-     * @return 文件访问URL
+     * @return 存储在数据库中的对象键（key），例如: posts/xxx.jpg
      */
     String uploadPostImage(MultipartFile file, Long userId);
     

@@ -2,6 +2,7 @@ package com.mentara.controller;
 
 
 import com.mentara.service.FileUploadService;
+import com.mentara.service.OssService;
 import com.mentara.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,9 @@ public class PostImageController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private OssService ossService;
+
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> uploadPostImage(
@@ -35,11 +39,13 @@ public class PostImageController {
             Long userId = currentUser == null ? null : currentUser.getId();
 
             // 上传帖子图片
-            String imageUrl = fileUploadService.uploadPostImage(file, userId);
+            String objectKey = fileUploadService.uploadPostImage(file, userId);
+            String imageUrl = ossService.generatePresignedUrl(objectKey, 3600L);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "图片上传成功");
+            response.put("objectKey", objectKey);
             response.put("imageUrl", imageUrl);
 
             return ResponseEntity.ok(response);

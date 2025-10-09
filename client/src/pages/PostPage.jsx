@@ -63,7 +63,7 @@ export default function PostPage() {
         formData.append("file", file);
 
         const response = await postImageAPI.uploadPostImage(formData);
-        return response.imageUrl;
+        return { objectKey: response.objectKey, imageUrl: response.imageUrl }
       });
 
       const imageUrls = await Promise.all(uploadPromises);
@@ -79,10 +79,10 @@ export default function PostPage() {
   };
 
   // 删除图片
-  const handleImageDelete = async (imageUrl) => {
+  const handleImageDelete = async (currentObjectKey) => {
     try {
-      await postImageAPI.deletePostImage(imageUrl);
-      setUploadedImages((prev) => prev.filter((url) => url !== imageUrl));
+      await postImageAPI.deletePostImage(currentObjectKey);
+      setUploadedImages((prev) => prev.filter(({ objectKey, imageUrl }) => objectKey !== currentObjectKey));
     } catch (error) {
       console.error("图片删除失败:", error);
       showConfirm("图片删除失败，请重试", () => {});
@@ -126,7 +126,7 @@ export default function PostPage() {
         content,
         mood,
         tagIds: tags.map((t) => t.id),
-        imageUrls: uploadedImages,
+        imageUrls: uploadedImages.map(({ objectKey, imageUrl }) => objectKey)
       };
       await postService.createPost(postData);
       showSuccess("发布成功！");
@@ -287,13 +287,13 @@ export default function PostPage() {
                 <div className="image-upload-section">
                   {/* 图片网格显示 */}
                   <div className="image-grid">
-                    {uploadedImages.map((imageUrl, index) => (
+                    {uploadedImages.map(({ objectKey, imageUrl }, index) => (
                       <div key={index} className="image-item">
                         <img src={imageUrl} alt={`上传的图片 ${index + 1}`} />
                         <button
                           type="button"
                           className="image-delete-btn"
-                          onClick={() => handleImageDelete(imageUrl)}
+                          onClick={() => handleImageDelete(objectKey)}
                           title="删除图片"
                         >
                           ×

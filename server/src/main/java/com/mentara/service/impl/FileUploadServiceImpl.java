@@ -19,7 +19,7 @@ public class FileUploadServiceImpl implements FileUploadService {
             file.getOriginalFilename(), 
             "avatar_" + userId + "_"
         );
-        // 使用阿里云OSS上传
+        // 上传并返回对象key，存入数据库
         return ossService.uploadFile(file, "avatars", fileName);
     }
 
@@ -30,19 +30,19 @@ public class FileUploadServiceImpl implements FileUploadService {
             file.getOriginalFilename(), 
             "post_" + userId + "_"
         );
-        // 使用阿里云OSS上传
+        // 上传并返回对象key，存入数据库
         return ossService.uploadFile(file, "posts", fileName);
     }
 
     @Override
     public void deleteAvatar(String fileUrl) {
-        // 使用阿里云OSS删除
+        // 删除时传入对象key
         ossService.deleteFile(fileUrl);
     }
 
     @Override
     public void deletePostImage(String fileUrl) {
-        // 使用阿里云OSS删除
+        // 删除时传入对象key
         ossService.deleteFile(fileUrl);
     }
 

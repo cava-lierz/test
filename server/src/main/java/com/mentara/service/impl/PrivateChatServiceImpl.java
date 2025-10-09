@@ -35,6 +35,9 @@ public class PrivateChatServiceImpl implements PrivateChatService {
     @Autowired
     private ChatRoomUserService chatRoomUserService;
 
+    @Autowired
+    private com.mentara.service.OssService ossService;
+
     @Override
     public List<ChatRoomResponse> getPrivateRooms(Long userId) {
         // 获取用户参与的所有私聊房间
@@ -155,12 +158,22 @@ public class PrivateChatServiceImpl implements PrivateChatService {
         
         User otherUser = otherChatRoomUser.getUser();
         
-        // 转换为UserProfileResponse
+        // 转换为UserProfileResponse, 并将avatar从object key转换为presigned url（如果需要）
         UserProfileResponse response = new UserProfileResponse();
         response.setId(otherUser.getId());
         response.setUsername(otherUser.getUsername());
         response.setNickname(otherUser.getNickname());
-        response.setAvatar(otherUser.getAvatar());
+        String avatar = otherUser.getAvatar();
+        if (avatar != null && !avatar.isEmpty() && !avatar.startsWith("http")) {
+            try {
+                String presigned = ossService.generatePresignedUrl(avatar, 3600L);
+                response.setAvatar(presigned != null ? presigned : avatar);
+            } catch (Exception ignored) {
+                response.setAvatar(avatar);
+            }
+        } else {
+            response.setAvatar(avatar);
+        }
         response.setRole(otherUser.getRole().name());
         response.setCreatedAt(otherUser.getCreatedAt());
         
@@ -217,7 +230,18 @@ public class PrivateChatServiceImpl implements PrivateChatService {
         request.setChatRoomId(room.getId());
         request.setUserId(user.getId());
         request.setDisplayNickname(user.getNickname());
-        request.setDisplayAvatar(user.getAvatar());
+        // store display avatar as either presigned URL or original value
+        String displayAvatar = user.getAvatar();
+        if (displayAvatar != null && !displayAvatar.isEmpty() && !displayAvatar.startsWith("http")) {
+            try {
+                String presigned = ossService.generatePresignedUrl(displayAvatar, 3600L);
+                request.setDisplayAvatar(presigned != null ? presigned : displayAvatar);
+            } catch (Exception ignored) {
+                request.setDisplayAvatar(displayAvatar);
+            }
+        } else {
+            request.setDisplayAvatar(displayAvatar);
+        }
         
         chatRoomUserService.addUserToRoom(request);
     }

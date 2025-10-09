@@ -24,6 +24,8 @@ public class AvatarController {
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private com.mentara.service.OssService ossService;
 
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
@@ -40,17 +42,23 @@ public class AvatarController {
                 fileUploadService.deleteAvatar(user.getAvatar());
             }
 
-            // 上传新头像
-            String avatarUrl = fileUploadService.uploadAvatar(file, user.getId());
+            // 上传新头像，返回存储的对象key（例如: avatars/xxx.jpg）并保存到DB
+            String objectKey = fileUploadService.uploadAvatar(file, user.getId());
 
-            // 更新用户头像
-            user.setAvatar(avatarUrl);
+            // 更新用户头像字段为object key
+            user.setAvatar(objectKey);
             userService.save(user);
+
+            // 生成临时可访问URL返回给前端（默认1小时）
+            String presignedUrl = null;
+            try {
+                presignedUrl = ossService.generatePresignedUrl(objectKey, 3600L);
+            } catch (Exception ignored) {}
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "头像上传成功");
-            response.put("avatarUrl", avatarUrl);
+            response.put("avatarUrl", presignedUrl != null ? presignedUrl : objectKey);
 
             return ResponseEntity.ok(response);
 
