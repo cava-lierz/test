@@ -6,8 +6,9 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
+Environment="PATH=/root/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin"
 WorkingDirectory=/root/Mentara/client
-ExecStart=npm start
+ExecStart=/root/.nvm/versions/node/v22.20.0/bin/npm start
 Restart=always
 RestartSec=3
 StandardOutput=journal
