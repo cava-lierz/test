@@ -1,13 +1,13 @@
 [Unit]
-Description=Embedding Service
+Description=Bert Service
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/Mentara/microservices/quick-embedding
-ExecStart=build/bin/embedding_service
+WorkingDirectory=/root/Mentara/client
+ExecStart=npm start
 Restart=always
 RestartSec=3
 StandardOutput=journal
