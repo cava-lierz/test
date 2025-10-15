@@ -1,0 +1,18 @@
+[Unit]
+Description=Mentara Database Stack (Docker Compose)
+Requires=docker.service network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=simple 
+User=root 
+Group=root
+
+WorkingDirectory=/root/mentara/database
+
+ExecStart=/usr/bin/docker compose up
+
+ExecStop=/usr/bin/docker compose down
+
+[Install]
+WantedBy=multi-user.target

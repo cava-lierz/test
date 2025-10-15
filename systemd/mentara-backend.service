@@ -1,0 +1,24 @@
+[Unit]
+Description=Mentara Spring Boot Backend Service
+Requires=network.target mentara-bert.service mentara-embedding.service mentara-db.service 
+After=network.target mentara-bert.service mentara-embedding.service mentara-db.service
+
+[Service]
+Type=simple
+
+# 服务的执行用户和组
+User=root
+Group=root
+
+WorkingDirectory=/root/Mentara/server
+ExecStart=/usr/bin/java -jar /root/Mentara/server/target/mentara-server.jar --spring.profiles.active=prod
+
+Restart=on-failure
+RestartSec=10s
+
+# 停止命令：发送 SIGTERM 信号给主进程
+KillMode=process
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
