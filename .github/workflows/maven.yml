@@ -39,15 +39,9 @@ jobs:
         directory: server
     - name: Prepare artifact for deployment
       working-directory: server
-<<<<<<< HEAD
-      run: mkdir -p staging
-           cp target/*.jar staging/
-=======
       run: | 
         mkdir -p staging
         cp target/*.jar staging/
-
->>>>>>> 982d5da75a3bb5e7bcf9ae5678b1af48f3b473d6
     - name: Upload application package
       uses: actions/upload-artifact@v4
       with:
@@ -74,7 +68,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}        # ECS 公网 IP
           username: ${{ secrets.SSH_USERNAME }}  # SSH 用户名 (如 ubuntu, root, ec2-user)
-          key: ${{ secrets.SSH_PRIVATE_KEY }}    # 您的 SSH 私钥
+          password: ${{ secrets.SSH_PASSWORD }}    # 您的 SSH 私钥
           port: 22                             # SSH 端口
           script: |
             TARGET_DIR=/root/Mentara/server/target
