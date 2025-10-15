@@ -71,7 +71,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             TARGET_DIR=/root/Mentara/server/target
-            JAR_PATH=/tmp/artifact_download/server/staging/*.jar
+            JAR_PATH=/tmp/artifact_download/*.jar
             echo "Starting deployment..."
             
             # 1. 停止服务
