@@ -63,6 +63,15 @@ jobs:
         with:
           name: mentara-server-package
           path: /tmp/artifact_download
+      - name: Securely Copy JAR to ECS Temp Dir
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          source: "/tmp/artifact_download/*.jar"
+          target: "/tmp/"
       - name: Deploy to ECS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
