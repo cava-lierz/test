@@ -70,7 +70,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
-          source: "/tmp/artifact_download/*.jar"
+          source: "/tmp/artifact_download/mentara-server-1.0.0.jar"
           target: "/tmp/"
       - name: Deploy to ECS via SSH
         uses: appleboy/ssh-action@v1.0.3
