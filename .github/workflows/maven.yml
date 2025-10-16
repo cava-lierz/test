@@ -71,7 +71,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           source: "/tmp/artifact_download/mentara-server-1.0.0.jar"
-          target: "/tmp/mentara-server.jar"
+          target: "/"
       - name: Deploy to ECS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -80,7 +80,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             TARGET_DIR=/root/Mentara/server/target
-            JAR_PATH=/tmp/mentara-server.jar
+            JAR_PATH=/tmp/artifact_download/mentara-server-1.0.0.jar
             echo "Starting deployment..."
             
             # 1. 停止服务
