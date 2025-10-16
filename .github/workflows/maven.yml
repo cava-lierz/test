@@ -88,6 +88,7 @@ jobs:
             
             # 2. 备份旧 JAR 并部署新 JAR
             cp $JAR_PATH $TARGET_DIR/mentara-server.jar
+            sudo chmod 755 $TARGET_DIR/mentara-server.jar
 
             # 3. 启动服务
             sudo systemctl start mentara-backend.service
