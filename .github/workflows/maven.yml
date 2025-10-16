@@ -80,7 +80,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             TARGET_DIR=/root/Mentara/server/target
-            JAR_PATH=/tmp/artifact_download/*.jar
+            JAR_PATH=/tmp/mentara-server-1.0.0.jar
             echo "Starting deployment..."
             
             # 1. 停止服务
@@ -90,7 +90,7 @@ jobs:
             cp $JAR_PATH $TARGET_DIR/mentara-server.jar
 
             # 3. 启动服务
-            sudo systemctl restart mentara-backend.service
+            sudo systemctl start mentara-backend.service
             
             echo "Deployment finished and services restarted."
 
