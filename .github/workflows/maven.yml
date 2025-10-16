@@ -93,6 +93,17 @@ jobs:
             # 3. 启动服务
             sudo systemctl start mentara-backend.service
             
-            echo "Deployment finished and services restarted."
+            # 4. 状态检查 (核心改进)
+            echo "Waiting 10 seconds for service to stabilize..."
+            sleep 20 # 给予 Spring Boot 足够时间来启动或抛出错误
+            
+            # 使用 systemctl is-active 检查服务状态
+            if sudo systemctl is-active --quiet mentara-backend.service; then
+                echo "✅ Deployment SUCCESS: Service is Running."
+            else
+                echo "❌ Deployment FAILED: Service failed to start or is not active."
+                echo "Please check logs with: sudo journalctl -u mentara-backend.service -e"
+                exit 1
+            fi
 
 
